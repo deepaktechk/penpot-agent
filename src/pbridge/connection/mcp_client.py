@@ -20,11 +20,16 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
+from pbridge import __version__
 from pbridge.connection.discovery import redact
 from pbridge.connection.errors import MCPError, PluginError, PluginSuspended
 from pbridge.connection.notifier import notify
 
 PROTOCOL_VERSION = "2025-03-26"
+
+# name the client honestly: Cloudflare (design.penpot.app) rejects urllib's default
+# "Python-urllib/3.x" signature with error 1010
+USER_AGENT = f"pbridge/{__version__}"
 
 # substrings of a tool error that mean "the plugin tab is asleep / not connected"
 SUSPENDED_MARKERS = ("suspended", "heartbeat", "not connected", "no plugin", "no client", "plugin is not")
@@ -92,7 +97,11 @@ class MCPClient:
     # ------------------------------------------------------------------ transport
     def _post(self, body: dict[str, Any], timeout: float | None = None) -> dict[str, Any] | None:
         """POST one JSON-RPC message. Notifications (no "id") return None."""
-        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "User-Agent": USER_AGENT,
+        }
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
         request = urllib.request.Request(self.url, json.dumps(body).encode(), headers)

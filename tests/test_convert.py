@@ -166,6 +166,28 @@ class Metrics(unittest.TestCase):
             fontmetrics.text_width, fontmetrics.fit_letter_spacing = original_width, original_fit
 
 
+    def test_text_with_glyphs_missing_from_penpot_font_is_not_fitted(self):
+        # bug: google.com "Google offered in: हिन्दी বাংলা ..." measured with Arimo (no Indic glyphs)
+        # got letter-spacing -2.7 px and the whole line was squeezed together
+        import pbridge.convert.fontmetrics as fontmetrics
+        original_width, original_fit, original_covers = fontmetrics.text_width, fontmetrics.fit_letter_spacing, fontmetrics.covers
+        fontmetrics.text_width = lambda *args, **kwargs: 600.0
+        fontmetrics.fit_letter_spacing = lambda *args, **kwargs: -2.7
+        fontmetrics.covers = lambda text, *args, **kwargs: text.isascii()
+        try:
+            font = ["sans-serif", "13px", "400", "normal", "normal", "rgb(0, 0, 0)", "center", "none", "normal", "none"]
+            elements = [text_el(1, "Offered in: हिन्दी বাংলা", [700, 540, 420, 16], font=font),
+                        text_el(2, "Plain ascii line", [700, 600, 100, 16], font=font)]
+            mixed, ascii_only = texts_of(converted_nodes(elements, {"fallback_font": "Arimo"}))
+            self.assertEqual(mixed["text"]["ls"], 0)
+            self.assertEqual(ascii_only["text"]["ls"], -2.7)          # covered text is still fitted
+            # and the centred line is centred by Penpot in a box, not anchored with the bogus width
+            self.assertEqual(mixed["text"]["align"], "center")
+            self.assertAlmostEqual(mixed["x"] + mixed["w"] / 2, 700 + 420 / 2, places=1)
+        finally:
+            fontmetrics.text_width, fontmetrics.fit_letter_spacing, fontmetrics.covers = original_width, original_fit, original_covers
+
+
 class Images(unittest.TestCase):
     @staticmethod
     def convert_with_svg(elements, svg_markup, opts=None):

@@ -135,6 +135,11 @@ class TextBuilder:
         """
         widest = max(lines, key=lambda line: line["r"][2])
         browser_width = widest["r"][2]
+        if fontmetrics.covers(widest["t"], penpot_font, css_weight(weight), italic) is False:
+            # Penpot draws the missing characters with a fallback font, so the width measured
+            # here is meaningless: a fit would squeeze or stretch the whole line
+            self.ctx.report["fit_skipped_missing_glyphs"] += 1
+            return letter_spacing
         penpot_width = fontmetrics.text_width(widest["t"], penpot_font, font_size, css_weight(weight), italic, letter_spacing, upper)
         want_fit = False
         if penpot_width and browser_width > 20:
@@ -190,7 +195,14 @@ class TextBuilder:
         if len(lines) == 1 and align in ("center", "right"):
             # single line: anchor exactly using the measured Penpot width (auto-width, no box)
             penpot_width = fontmetrics.text_width(texts[0], penpot_font, font_size, css_weight(weight), italic, letter_spacing, upper)
-            if penpot_width:
+            if fontmetrics.covers(texts[0], penpot_font, css_weight(weight), italic) is False:
+                # the width is unknown (Penpot draws missing glyphs with a fallback font):
+                # let Penpot align the line inside a wide box around the browser's line box
+                line_x, _, line_width, _ = lines[0]["r"]
+                node_width = line_width + BOX_SLACK
+                node_x = line_x - BOX_SLACK / 2 if align == "center" else line_x + line_width - node_width
+                align_used, grow = align, "auto-height"
+            elif penpot_width:
                 line_x, _, line_width, _ = lines[0]["r"]
                 node_x = line_x + line_width / 2 - penpot_width / 2 if align == "center" else line_x + line_width - penpot_width
                 align_used, grow, node_width = "left", "auto-width", penpot_width

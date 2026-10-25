@@ -12,6 +12,8 @@ import urllib.request
 from functools import lru_cache
 from pathlib import Path
 
+from pbridge.convert import font_cmap
+
 CACHE = Path.home() / ".cache" / "pbridge" / "fonts"
 
 
@@ -67,6 +69,23 @@ def text_width(text: str, family: str, size: float, weight: int = 400, italic: b
     width = _font(str(path), float(size)).getlength(text)
     return width + letter_spacing * max(0, len(text) - 1)
 
+
+
+@lru_cache(maxsize=64)
+def _unicode_ranges(path: str) -> tuple[tuple[int, int], ...]:
+    return tuple(font_cmap.unicode_ranges(Path(path).read_bytes()))
+
+
+def covers(text: str, family: str, weight: int = 400, italic: bool = False) -> bool | None:
+    """True when the Penpot font has a glyph for every character of text (so text_width is
+    trustworthy). None if the font file or its cmap is unavailable."""
+    path = font_file(family, int(weight), bool(italic))
+    if not path:
+        return None
+    ranges = _unicode_ranges(str(path))
+    if not ranges:
+        return None
+    return font_cmap.covers(list(ranges), text)
 
 def fit_letter_spacing(lines: list[str], target_width: float, family: str, size: float, weight: int = 400,
                        italic=False, base_letter_spacing: float = 0.0, upper=False) -> float | None:
