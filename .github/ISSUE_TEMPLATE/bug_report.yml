@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work, or a website clones badly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Never paste your MCP URL or key** (`userToken=...`). pb redacts it in its own output.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: The `pb` command (or Claude Code prompt) and its output; re-run with `-v` if possible.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Website URL (for clone problems, if public)
+  - type: textarea
+    id: visual
+    attributes:
+      label: Montage / screenshots
+      description: For visual problems, attach the montage from `.pbridge/diffs/` or a screenshot.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: "`pb --version`, Penpot version (hosted or self-hosted), Node.js, OS"
+    validations:
+      required: true

@@ -1,0 +1,26 @@
+{
+  "name": "penpot-agent",
+  "description": "Website to Penpot for Claude Code: convert live web pages into editable Penpot designs with pixel-level visual QA.",
+  "owner": {
+    "name": "Deepak",
+    "url": "https://github.com/deepaktechk"
+  },
+  "plugins": [
+    {
+      "name": "penpot-agent",
+      "description": "Convert any website into an editable, pixel-accurate Penpot design, then inspect, edit, export and visually QA it - through the Penpot MCP server.",
+      "source": "./",
+      "version": "0.1.0",
+      "category": "design",
+      "tags": [
+        "penpot",
+        "penpot-agent",
+        "html-to-penpot",
+        "mcp",
+        "design",
+        "visual-qa"
+      ],
+      "homepage": "https://github.com/deepaktechk/penpot-agent#readme"
+    }
+  ]
+}

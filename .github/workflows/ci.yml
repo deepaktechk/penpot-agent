@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Install
+        run: uv sync --python ${{ matrix.python }}
+      - name: Lint
+        run: uv run ruff check src tests
+      - name: Unit tests
+        run: uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging -v
+
+  typescript:
+    name: TypeScript + bundles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: js/package-lock.json
+      - run: npm --prefix js ci
+      - name: Typecheck, naming lint, build
+        run: npm --prefix js run check
+      - name: Committed bundles are up to date
+        run: |
+          git diff --exit-code -- src/pbridge/bundles || {
+            echo "::error::src/pbridge/bundles is stale: run 'npm --prefix js run build' and commit the result"; exit 1; }
+
+  end-to-end:
+    name: Fixture capture (Chrome)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Allow Chrome's sandbox (Ubuntu restricts unprivileged user namespaces)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: uv sync
+      - name: Capture and convert tests/fixtures/tricky.html
+        run: uv run python -m unittest tests.test_fixture -v
+
+  package:
+    name: Build and install the package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv build
+      - name: Install the wheel as a tool and run it
+        run: |
+          uv tool install dist/*.whl
+          pb --version
+          python3 -c "import json; [json.load(open(f)) for f in ('.claude-plugin/plugin.json', '.claude-plugin/marketplace.json')]"

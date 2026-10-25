@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directory: /js
+    schedule:
+      interval: monthly
+    groups:
+      js-dependencies:
+        patterns: ["*"]
+    # puppeteer-core is bundled into src/pbridge/bundles/node-cli.js; Dependabot cannot rebuild
+    # the bundle, so its PRs always fail the "bundles up to date" check. Upgrade it by hand:
+    # npm --prefix js install puppeteer-core@X && npm --prefix js run check, then commit the bundles.
+    ignore:
+      - dependency-name: puppeteer-core
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly

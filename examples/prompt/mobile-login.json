@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "width": 390,
+  "height": 844,
+  "nodes": [
+    {
+      "t": "board", "key": "login", "name": "Login – mobile", "x": 0, "y": 0, "w": 390, "h": 844, "fill": "#FFFFFF", "clip": true,
+      "layout": {"type": "flex", "dir": "column", "gap": 16, "padding": [96, 24, 32, 24]},
+      "children": [
+        {"t": "text", "name": "Title", "x": 0, "y": 0, "text": {"text": "Welcome back", "font": "Inter", "weight": 700, "size": 30, "lh": 36, "color": "#0F172A"}},
+        {"t": "text", "name": "Subtitle", "x": 0, "y": 0, "child": {"sizing": ["fill", "auto"]},
+         "text": {"text": "Sign in to continue to your workspace.", "font": "Inter", "size": 16, "lh": 24, "color": "#475569", "grow": "auto-height"}},
+        {"t": "board", "name": "Input / Email", "x": 0, "y": 0, "w": 342, "h": 52, "fill": "#F8FAFC", "r": 12,
+         "stroke": {"c": "#CBD5E1", "w": 1}, "child": {"sizing": ["fill", "fix"]},
+         "layout": {"type": "flex", "dir": "row", "align": "center", "padding": [0, 16]},
+         "children": [{"t": "text", "name": "Placeholder", "x": 0, "y": 0, "text": {"text": "you@company.com", "font": "Inter", "size": 16, "color": "#64748B"}}]},
+        {"t": "board", "name": "Input / Password", "x": 0, "y": 0, "w": 342, "h": 52, "fill": "#F8FAFC", "r": 12,
+         "stroke": {"c": "#CBD5E1", "w": 1}, "child": {"sizing": ["fill", "fix"]},
+         "layout": {"type": "flex", "dir": "row", "align": "center", "padding": [0, 16]},
+         "children": [{"t": "text", "name": "Placeholder", "x": 0, "y": 0, "text": {"text": "Password", "font": "Inter", "size": 16, "color": "#64748B"}}]},
+        {"t": "board", "name": "Button / Primary", "x": 0, "y": 0, "w": 342, "h": 52, "fill": "#2563EB", "r": 12,
+         "child": {"sizing": ["fill", "fix"]},
+         "layout": {"type": "flex", "dir": "row", "align": "center", "justify": "center"},
+         "children": [{"t": "text", "name": "Label", "x": 0, "y": 0, "text": {"text": "Sign in", "font": "Inter", "weight": 600, "size": 16, "color": "#FFFFFF"}}]}
+      ]
+    }
+  ]
+}

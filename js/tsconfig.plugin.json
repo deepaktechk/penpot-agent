@@ -1,0 +1,6 @@
+{
+  "//": "Penpot plugin sandbox: plain ES2020, no DOM, no Node. Globals are declared in src/plugin/globals.d.ts",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "lib": ["es2020"], "types": [] },
+  "include": ["src/plugin/**/*.ts"]
+}

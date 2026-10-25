@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "width": 1200,
+  "height": 640,
+  "nodes": [
+    {
+      "t": "board", "key": "pricing", "name": "Pricing", "x": 0, "y": 0, "w": 1200, "h": 640, "fill": "#0B1020", "clip": true,
+      "layout": {"type": "flex", "dir": "column", "gap": 40, "padding": [64, 80], "align": "center"},
+      "children": [
+        {"t": "text", "name": "Title", "x": 0, "y": 0, "child": {"sizing": ["auto", "auto"]},
+         "text": {"text": "Simple pricing", "font": "Inter", "weight": 700, "size": 44, "lh": 52, "color": "#FFFFFF", "align": "center"}},
+        {"t": "board", "name": "Plans", "x": 0, "y": 0, "w": 1040, "h": 380, "fill": null,
+         "layout": {"type": "grid", "columns": ["1fr", "1fr", "1fr"], "rows": ["auto"], "gap": [24, 24]},
+         "children": [
+           {"t": "board", "name": "Plan / Starter", "x": 0, "y": 0, "w": 330, "h": 380, "fill": "#151B2E", "r": 16,
+            "stroke": {"c": "#2A3350", "w": 1},
+            "layout": {"type": "flex", "dir": "column", "gap": 12, "padding": 28},
+            "children": [
+              {"t": "text", "name": "Name", "x": 0, "y": 0, "text": {"text": "Starter", "font": "Inter", "weight": 600, "size": 18, "color": "#A5B4FC"}},
+              {"t": "text", "name": "Price", "x": 0, "y": 0, "text": {"text": "$0", "font": "Inter", "weight": 700, "size": 40, "color": "#FFFFFF"}},
+              {"t": "text", "name": "Description", "x": 0, "y": 0, "child": {"sizing": ["fill", "auto"]},
+               "text": {"text": "For personal projects and trying things out.", "font": "Inter", "size": 15, "lh": 22, "color": "#CBD5E1", "grow": "auto-height"}}
+            ]},
+           {"t": "board", "name": "Plan / Pro", "x": 0, "y": 0, "w": 330, "h": 380, "fill": "#4F46E5", "r": 16,
+            "sh": [[0, 20, 40, -12, "#4F46E5", 0.5]],
+            "layout": {"type": "flex", "dir": "column", "gap": 12, "padding": 28},
+            "children": [
+              {"t": "text", "name": "Name", "x": 0, "y": 0, "text": {"text": "Pro", "font": "Inter", "weight": 600, "size": 18, "color": "#E0E7FF"}},
+              {"t": "text", "name": "Price", "x": 0, "y": 0, "text": {"text": "$19", "font": "Inter", "weight": 700, "size": 40, "color": "#FFFFFF"}},
+              {"t": "text", "name": "Description", "x": 0, "y": 0, "child": {"sizing": ["fill", "auto"]},
+               "text": {"text": "For professionals who ship every week.", "font": "Inter", "size": 15, "lh": 22, "color": "#E0E7FF", "grow": "auto-height"}}
+            ]},
+           {"t": "board", "name": "Plan / Team", "x": 0, "y": 0, "w": 330, "h": 380, "fill": "#151B2E", "r": 16,
+            "stroke": {"c": "#2A3350", "w": 1},
+            "layout": {"type": "flex", "dir": "column", "gap": 12, "padding": 28},
+            "children": [
+              {"t": "text", "name": "Name", "x": 0, "y": 0, "text": {"text": "Team", "font": "Inter", "weight": 600, "size": 18, "color": "#A5B4FC"}},
+              {"t": "text", "name": "Price", "x": 0, "y": 0, "text": {"text": "$49", "font": "Inter", "weight": 700, "size": 40, "color": "#FFFFFF"}},
+              {"t": "text", "name": "Description", "x": 0, "y": 0, "child": {"sizing": ["fill", "auto"]},
+               "text": {"text": "Shared libraries, roles and review workflows.", "font": "Inter", "size": 15, "lh": 22, "color": "#CBD5E1", "grow": "auto-height"}}
+            ]}
+         ]}
+      ]
+    }
+  ]
+}

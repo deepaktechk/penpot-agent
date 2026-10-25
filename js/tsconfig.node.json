@@ -1,0 +1,6 @@
+{
+  "//": "Node CLI (node-cli.ts: capture, rasterize). DOM lib is included for the small callbacks passed to page.evaluate()",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "lib": ["es2022", "dom", "dom.iterable"], "types": ["node"] },
+  "include": ["src/node-cli.ts", "src/capture/*.ts", "src/capture/steps/**/*.ts", "src/rasterize/**/*.ts", "src/shared/**/*.ts"]
+}

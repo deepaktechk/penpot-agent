@@ -1,0 +1,26 @@
+{
+  "name": "penpot-agent",
+  "version": "0.1.0",
+  "description": "Convert any website into an editable, pixel-accurate Penpot design, then inspect, edit, export and visually QA it - through the Penpot MCP server.",
+  "author": {
+    "name": "Deepak",
+    "email": "deepaktechk@gmail.com",
+    "url": "https://github.com/deepaktechk"
+  },
+  "homepage": "https://github.com/deepaktechk/penpot-agent#readme",
+  "repository": "https://github.com/deepaktechk/penpot-agent",
+  "license": "GPL-3.0-or-later",
+  "icon": "assets/icon.png",
+  "keywords": [
+    "penpot",
+    "penpot-agent",
+    "html-to-penpot",
+    "website-to-design",
+    "penpot-mcp",
+    "mcp",
+    "design",
+    "figma-alternative",
+    "visual-qa",
+    "ui-design"
+  ]
+}

@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an idea or a website pattern pb should handle
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Commands, options or behaviour you have in mind.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds you tried

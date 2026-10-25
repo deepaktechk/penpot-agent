@@ -1,0 +1,76 @@
+[project]
+name = "penpot-agent"
+version = "0.1.0"
+description = "Convert any website into an editable, pixel-accurate Penpot design (HTML to Penpot) via the Penpot MCP server - CLI and Claude Code plugin with visual QA."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Deepak", email = "deepaktechk@gmail.com" }]
+requires-python = ">=3.10"
+keywords = ["penpot", "penpot-agent", "html-to-penpot", "html-to-design", "website-to-design", "mcp", "penpot-mcp", "claude-code", "figma-alternative", "design-automation", "visual-regression", "web-scraping"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Graphics :: Editors :: Vector-Based",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = [
+    "pillow>=10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/deepaktechk/penpot-agent"
+Documentation = "https://github.com/deepaktechk/penpot-agent/tree/main/docs"
+Issues = "https://github.com/deepaktechk/penpot-agent/issues"
+Changelog = "https://github.com/deepaktechk/penpot-agent/blob/main/CHANGELOG.md"
+
+[project.scripts]
+pb = "pbridge.cli:main"
+penpot-agent = "pbridge.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "pbridge"
+
+[tool.uv]
+# `uv sync` installs pbridge in editable mode for development
+package = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 140
+src = ["src", "tests"]
+target-version = "py310"
+extend-exclude = ["src/pbridge/bundles"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# compact `a; b` statements are used deliberately in the numeric code;
+# naming is checked by tests/test_naming.py instead of E741
+ignore = ["E701", "E702", "E741", "B007", "B905", "I001"]
+
+[tool.ruff.lint.per-file-ignores]
+# test fixtures are long literal layouts
+"tests/*" = ["E501"]

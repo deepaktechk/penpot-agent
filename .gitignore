@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+/build/
+/dist/
+*.egg-info/
+
+# Node (the bundles in src/pbridge/bundles/ ARE committed: see js/build.mjs)
+node_modules/
+js/dist/
+
+# per-project state created by `pb init` (captures, renders, uploads)
+.pbridge/
+
+# personal notes for Claude Code / other agents (machine, local projects)
+CLAUDE.local.md
+AGENTS.local.md
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+

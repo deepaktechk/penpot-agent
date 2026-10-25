@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- Capture session options: --color-scheme (prefers-color-scheme) and --cookies (pages behind a login). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>session fixture</title>
+<style>
+  body { margin: 0; font: 16px/1.4 sans-serif; }
+  #scheme-probe { width: 300px; height: 120px; background: rgb(255, 255, 255); border: 1px solid rgb(0, 0, 0); }
+  @media (prefers-color-scheme: dark) {
+    #scheme-probe { background: rgb(17, 24, 39); }
+  }
+  #members { display: none; padding: 20px; }
+  #guests { padding: 20px; }
+</style>
+</head>
+<body>
+  <div id="scheme-probe"></div>
+  <p id="guests">Please sign in</p>
+  <p id="members">Welcome back, member</p>
+  <script>
+    if (document.cookie.split("; ").includes("session=ok")) {
+      document.getElementById("members").style.display = "block";
+      document.getElementById("guests").style.display = "none";
+    }
+  </script>
+</body>
+</html>

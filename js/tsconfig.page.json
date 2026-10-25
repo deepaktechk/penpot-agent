@@ -1,0 +1,6 @@
+{
+  "//": "Code that runs inside the captured web page (browser DOM)",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "lib": ["es2022", "dom", "dom.iterable"], "types": [] },
+  "include": ["src/capture/page/**/*.ts", "src/shared/layout-types.ts"]
+}
