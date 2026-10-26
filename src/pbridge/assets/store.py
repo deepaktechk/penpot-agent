@@ -5,7 +5,7 @@ descriptor returned by the upload:
 
     {key: {"src": url | path, "hash": sha1, "image": {id, width, height, ...}}}
 
-Upload strategy for a URL:
+Upload strategy for a URL (`many_urls` does step 1 for many URLs at once, concurrently):
   1. ask Penpot's server to fetch it (`penpot.uploadMediaUrl`)  - public URLs
   2. else download locally and relay the bytes (`uploadMediaData`) - private hosts, file://
      SVGs are rasterized first because Penpot media cannot be SVG bytes.
@@ -23,6 +23,8 @@ from typing import Any
 from pbridge.assets.fetch import download, rasterize_svg
 from pbridge.assets.urls import is_local, is_svg, key_for, norm_url
 from pbridge.connection import Bridge
+
+UPLOAD_BATCH = 12   # public URLs uploaded concurrently per plugin call
 
 MIME_BY_SUFFIX = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
                   ".gif": "image/gif", ".svg": "image/svg+xml"}
@@ -60,11 +62,7 @@ class AssetStore:
             except Exception:
                 image = None   # Penpot's server could not fetch it (private host, auth, ...) -> relay bytes
         if not image:
-            if is_svg(url):
-                data, mime = rasterize_svg(url), "image/png"
-            else:
-                data, mime = download(url)
-            return self.from_bytes(data, key, mime, url)
+            return self._upload_local(url, key)
         if not image.get("id"):
             raise ValueError(f"{key}: Penpot returned an incomplete image descriptor")
         self.entries[key] = {"src": url, "hash": hashlib.sha1(url.encode()).hexdigest(), "image": image}
@@ -132,12 +130,50 @@ class AssetStore:
         descriptors = {key: entry["image"] for key, entry in self.entries.items() if entry.get("image")}
         return self.bridge.exec("return pb.registerImages(DATA);", data=descriptors)
 
-    def many_urls(self, mapping: dict[str, str], force: bool = False) -> dict[str, str]:
-        """Upload {key: url}; failures are reported as 'ERR <message>' instead of raising."""
+    def many_urls(self, mapping: dict[str, str], force: bool = False, batch: int = UPLOAD_BATCH) -> dict[str, str]:
+        """Upload {key: url}; failures are reported as 'ERR <message>' instead of raising.
+
+        Public URLs go to Penpot's server `batch` at a time in one plugin call (concurrent
+        uploadMediaUrl); only the ones it cannot fetch take the one-by-one path (download or
+        rasterize locally, upload bytes). Callers register the descriptors with `sync()`.
+        """
         results: dict[str, str] = {}
+        remote: list[dict[str, str]] = []
         for key, url in mapping.items():
+            if not force and key in self.entries and self.entries[key].get("image"):
+                results[key] = key
+            elif is_local(norm_url(url)):
+                results[key] = ""     # one by one below
+            else:
+                remote.append({"key": key, "url": norm_url(url)})
+        for start in range(0, len(remote), batch):
+            chunk = remote[start:start + batch]
             try:
-                results[key] = self.from_url(url, key, force)
+                uploaded = self.bridge.exec("return await pb.uploadUrls(DATA);", data=chunk, timeout=300)
+            except Exception:
+                uploaded = {}     # the whole call failed: every item of the chunk falls back below
+            for item in chunk:
+                image = uploaded.get(item["key"]) or {}
+                if image.get("id"):
+                    self.entries[item["key"]] = {"src": item["url"], "hash": hashlib.sha1(item["url"].encode()).hexdigest(),
+                                                 "image": image}
+                    results[item["key"]] = item["key"]
+                else:
+                    results[item["key"]] = ""
+        self.save()
+        for key, url in mapping.items():
+            if results.get(key):
+                continue
+            try:
+                results[key] = self._upload_local(norm_url(url), key)
             except Exception as error:
                 results[key] = f"ERR {str(error)[:120]}"
         return results
+
+    def _upload_local(self, url: str, key: str) -> str:
+        """Penpot's server could not fetch `url`: get the bytes here (SVG rasterized) and upload them."""
+        if is_svg(url):
+            data, mime = rasterize_svg(url), "image/png"
+        else:
+            data, mime = download(url)
+        return self.from_bytes(data, key, mime, url)

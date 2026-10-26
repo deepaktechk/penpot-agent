@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from pbridge.cli.support import Args, get_bridge, out
-from pbridge.connection import Bridge, MCPClient, discover_mcp_url, redact
+from pbridge.connection import BackendClient, Bridge, MCPClient, access_token, discover_mcp_url, redact
 from pbridge import __version__
 from pbridge.paths import NODE_CLI, PLUGIN_RUNTIME, SOURCE_ROOT, TESTS_DIR, has_source_checkout
 from pbridge.project import ProjectState
@@ -35,6 +35,18 @@ def _node_version() -> str | None:
         return subprocess.run(["node", "--version"], capture_output=True, text=True, timeout=10).stdout.strip() or None
     except (OSError, subprocess.TimeoutExpired):
         return None
+
+
+def _backend_status(state: ProjectState) -> dict:
+    """Optional backend API (access token): faster bulk uploads/imports. Missing token is not a problem."""
+    if not access_token():
+        return {"token": "missing", "note": "optional: set PENPOT_ACCESS_TOKEN for faster builds (docs/fast-build.md)"}
+    try:
+        client = BackendClient(state)
+        profile = client.call("get-profile", timeout=30)
+        return {"url": client.base_url, "token": "set", "ok": bool(profile and profile.get("id"))}
+    except Exception as error:
+        return {"token": "set", "ok": False, "error": redact(str(error))[:200]}
 
 
 def cmd_doctor(args: Args) -> int | None:
@@ -67,6 +79,7 @@ def cmd_doctor(args: Args) -> int | None:
         message = redact(str(error))[:300]
         report["penpot_error"] = message
         problems.append("Penpot not reachable: " + message + " (see docs/penpot-setup.md)")
+    report["backend"] = _backend_status(state)
     report["assets_cached"] = len(state.load_json("assets.json", {}))
     report["reference"] = state.config.get("reference")
     report["problems"] = problems

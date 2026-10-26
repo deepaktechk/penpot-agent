@@ -15,7 +15,7 @@ plugin call, `--version`.
 | Command | Purpose |
 |---|---|
 | `pb init [dir] [--reference shot.png]` | create `.pbridge/` (config, sub-folders, `.gitignore`) |
-| `pb doctor` | check Node.js, Chrome, bundles, MCP server and plugin; exit 1 with a `problems` list |
+| `pb doctor` | check Node.js, Chrome, bundles, MCP server and plugin; exit 1 with a `problems` list; `backend` shows the optional access-token API |
 | `pb prelude [--force]` | (re)inject the in-plugin runtime (normally automatic) |
 | `pb selftest [--no-capture] [--build]` | regression suite (source checkout only); `--build` also builds in Penpot |
 
@@ -25,7 +25,7 @@ plugin call, `--version`.
 |---|---|
 | `pb capture URL [--name N] [--fonts "A,B"] [--width 1920] [--widths 1440,768,390] [--hide sel] [--click sel] [--wait ms] [--selector sel] [--color-scheme dark\|light] [--cookies file.json] [--user-data-dir DIR] [--force]` | screenshot + layout dump behind the capture gate; becomes the project reference |
 | `pb convert [capture] [--fallback-font F] [--system-font F] [--font-map "Web=Penpot"] [--region y0,y1] [--flat] [--no-font-check]` | layout → spec JSON in `.pbridge/specs/` |
-| `pb rebuild [--board NAME] [--after BOARD\|'*'] --font F [--only keys] [--fix] [--hotspots N] [--montage N]` | convert → build → [autofix] → compare → render gate |
+| `pb rebuild [--board NAME] [--after BOARD\|'*'] --font F [--only keys] [--all] [--fix] [--hotspots N] [--montage N]` | convert → build → [autofix] → compare → render gate; sections unchanged since the last build are kept (`--all` rebuilds them too); prints the time of each stage |
 | `pb clone URL --board NAME [--fonts F] [--fallback-font F]` | capture → convert → build → compare in one go |
 | `pb library [--colors 12] [--types 12] [--prefix Site] [--dry]` | most used colours and text styles → Penpot library |
 | `pb tokens [--capture C] [--set Site] [--colors 12] [--dry]` | capture colours and type → a Penpot design-token set |
@@ -132,6 +132,8 @@ about once a minute.
 | Variable | Meaning |
 |---|---|
 | `PENPOT_MCP_URL` | MCP URL (overrides every other source; see [penpot-setup.md](penpot-setup.md)) |
+| `PENPOT_ACCESS_TOKEN` | optional personal access token for the Penpot backend API (bulk uploads/imports without the browser tab); never stored in project files. See [fast-build.md](fast-build.md) |
+| `PENPOT_URL` | backend base URL for the access token (default `https://design.penpot.app`; or config `penpot_url`) |
 | `PBRIDGE_PROJECT` | project folder (instead of searching upwards for `.pbridge/`) |
 | `PBRIDGE_WAIT` | seconds to wait for a sleeping Penpot tab (default 600, 0 = fail at once) |
 | `CHROME_PATH` | Chrome/Chromium binary for capture |
@@ -139,5 +141,6 @@ about once a minute.
 ## Project state (`.pbridge/`)
 
 `config.json` (reference, capture, page board), `assets.json` (uploaded images), `idmap.json`
-(spec key → shape id), `boxes.json` (target boxes for audit), `history.json` (render-gate runs),
+(spec key → shape id), `boxes.json` (target boxes for audit), `section_hashes.json` (content hash
+of each built section; unchanged sections are skipped on rebuild), `history.json` (render-gate runs),
 and the folders `captures/`, `specs/`, `renders/`, `diffs/`, `snapshots/`.

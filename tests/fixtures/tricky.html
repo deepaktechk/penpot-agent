@@ -47,6 +47,12 @@
   </div></div>
 </section>
 <section id="second-section" style="max-width:1100px;margin:0 auto;padding:40px 0"><h2>Second stacked section</h2><p>Centred container content.</p></section>
+<!-- floating label (facebook.com login): the box's own overflow:hidden clipped its border away; the label is scaled
+     with a transform, so its text fits its untransformed box (no ellipsis) and is drawn at 15px * 0.8 = 12px -->
+<div id="float-field" style="position:relative;width:300px;height:60px;border:1px solid #686a6e;border-radius:16px;overflow:hidden;margin:20px auto">
+  <input aria-label="email" style="position:absolute;left:16px;top:24px;width:260px;border:0;outline:0;font:15px Outfit;background:transparent">
+  <label id="float-label" style="position:absolute;left:16px;top:10px;width:250px;font:15px Outfit;color:#686a6e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:scale(0.8);transform-origin:0 0">Email address or mobile number</label>
+</div>
 <!-- mixed scripts the fallback font lacks: letter-spacing fit used to squeeze the line (google.com language links) -->
 <p id="mixed-scripts" style="font-family:Arial,sans-serif;font-size:13px;text-align:center">Offered in: <a href="#">हिन्दी</a> <a href="#">বাংলা</a> <a href="#">తెలుగు</a> <a href="#">தமிழ்</a></p>
 <div id="cookie-consent" style="position:fixed;bottom:0;left:0;right:0;height:80px;background:#222;color:#fff">We use cookies. Accept?</div>

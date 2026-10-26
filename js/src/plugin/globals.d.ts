@@ -37,7 +37,7 @@ declare const penpot: {
   root: Shape;
   selection: Shape[];
   currentFile: { name: string } | null;
-  currentPage: { name: string } | null;
+  currentPage: { id: string; name: string; getShapeById(id: string): Shape | null } | null;
   fonts: { all: any[]; findByName(name: string): any };
   library: { local: any };
   createBoard(): Shape;

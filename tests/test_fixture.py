@@ -85,9 +85,27 @@ class FixtureEndToEnd(unittest.TestCase):
         sections = [node for node in self.spec["nodes"] if node.get("t") == "board" and node.get("key") != "secbg"]
         self.assertGreaterEqual(len(sections), 2)
 
+    def test_own_overflow_does_not_clip_own_border(self):
+        # bug: a box's own overflow:hidden clipped its border (facebook.com login inputs lost their right/bottom edge)
+        fields = [element for element in self.layout["elements"] if element.get("htmlId") == "float-field"]
+        self.assertTrue(fields)
+        self.assertNotIn("clip", fields[0])
+
+    def test_scaled_label_is_not_ellipsized(self):
+        # bug: a transform-scaled label was measured against its scaled box -> "Email address or mobile n…"
+        labels = [element for element in self.layout["elements"] if element.get("htmlId") == "float-label"]
+        self.assertTrue(labels)
+        self.assertNotIn("visible", labels[0])
+
     # ---------------- conversion
     def test_lab_box_color(self):
         self.assertTrue(any(node.get("t") == "rect" and node.get("fill") == "#1E2939" for node in self.nodes))
+
+    def test_scaled_label_font_size(self):
+        # bug: transform: scale(0.8) on a 15px label was ignored and the text built at 15px
+        label = self.find_text("Email address or mobile number")
+        self.assertTrue(label)
+        self.assertAlmostEqual(label[0]["text"]["size"], 12.0, places=1)
 
     def test_ancestor_line_clamp(self):
         text = self.find_text("Smart SaaS")[0]["text"]["text"]
@@ -154,9 +172,13 @@ class FixtureEndToEnd(unittest.TestCase):
         project = self.tmp / "proj"; state = ProjectState.open(project); state.init()
         bridge = Bridge(state)
         # placed right of everything: exercises the board-origin offset (bug: shapes landed at x=0)
-        board = PageBoards(bridge).ensure("pbridge selftest (auto-removed)", self.spec["width"], self.spec["height"], after="*")
+        # convert like `pb convert` does: families Penpot lacks (Arial in #mixed-scripts) use the fallback font
+        from pbridge.convert import Converter
+        available = set(bridge.exec("return penpot.fonts.all.map(font => font.name);"))
+        spec = Converter(self.layout, {"fallback_font": "Outfit", "screenshot": str(self.shot), "available_fonts": available}).convert()
+        board = PageBoards(bridge).ensure("pbridge selftest (auto-removed)", spec["width"], spec["height"], after="*")
         try:
-            report = SpecBuilder(bridge).build(self.spec, parent=board, default_font="Outfit", progress=lambda *message: None)
+            report = SpecBuilder(bridge).build(spec, parent=board, default_font="Outfit", progress=lambda *message: None)
             self.assertFalse(report["failed"], report["failed"])
             placement = bridge.exec(OUTSIDE_JS, data=board)
             self.assertGreater(placement["boardX"], 0)
@@ -165,7 +187,7 @@ class FixtureEndToEnd(unittest.TestCase):
             color = bridge.exec(LAST_RANGE_COLOR_JS, data=board)
             self.assertEqual(color.upper(), "#EF3225")
             render = Exporter(bridge).export(board)
-            gate = render_gate(self.shot, render, self.spec, state=None, overrides={"section_pct_error": 6.0})
+            gate = render_gate(self.shot, render, spec, state=None, overrides={"section_pct_error": 6.0})
             self.assertTrue(gate["ok"], gate["errors"])
         finally:
             bridge.exec("const shape = pb.byId(DATA); if (shape) shape.remove(); return 1;", data=board)

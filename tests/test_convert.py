@@ -188,6 +188,15 @@ class Metrics(unittest.TestCase):
             fontmetrics.text_width, fontmetrics.fit_letter_spacing, fontmetrics.covers = original_width, original_fit, original_covers
 
 
+    def test_scaled_text_uses_scaled_font_size(self):
+        # bug: facebook.com floating label (15px, transform: scale(0.8667)) was built at 15px
+        font = ["Outfit", "15px", "400", "17px", "normal", "rgb(0, 0, 0)", "start", "none", "normal", "none"]
+        label = text_el(1, "Email address", [100, 100, 90, 14.73], font=font, tf="matrix(0.866667, 0, 0, 0.866667, 0, -11.2667)")
+        text = texts_of(converted_nodes([label], {"metric_fit": False}))[0]["text"]
+        self.assertAlmostEqual(text["size"], 13.0, places=2)
+        self.assertAlmostEqual(text["lh"], 14.73, places=2)
+
+
 class Images(unittest.TestCase):
     @staticmethod
     def convert_with_svg(elements, svg_markup, opts=None):

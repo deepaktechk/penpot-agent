@@ -6,7 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Faster builds (clockify.me, 712 nodes: full `pb rebuild --fix` 173 s → 84 s, unchanged rebuild 26 s,
+  same QA result). Shape lookups use `page.getShapeById` (~0.2 ms) instead of a whole-document search
+  (~600 ms per id), which made autofix take ~55 s; SVGs are downloaded in parallel before converting;
+  images are uploaded concurrently (32 images: 21 s → 4 s); batches are packed by shape count and
+  request size; the text post-passes run once per build; old sections are removed in one call;
+  the offset audit runs in parallel processes; after autofix the board is exported once, not settled again.
+- `pb rebuild` skips sections whose content did not change since the last build (`--all` rebuilds
+  every section), saves its state after every section (an interrupted build resumes), and prints
+  the time of each stage (`[rebuild] build 32.9s`) plus a `seconds` summary.
+
+### Added
+- Optional Penpot access token (`PENPOT_ACCESS_TOKEN`, `PENPOT_URL`) for the backend API, reported by
+  `pb doctor`; plan and measurements in docs/fast-build.md.
+
 ### Fixed
+- `pb selftest --build` converted the fixture without Penpot's font list, so the Arial line failed
+  with `font not found: Arial`; it now converts like `pb convert` (missing families use the fallback).
 - Capture: pages using `font-display: optional` could be captured with the fallback font when the
   web font was not served from Chrome's cache in time (seen on CI). After a fallback-painted load,
   the capture now rewrites `optional` to `swap` and reloads.

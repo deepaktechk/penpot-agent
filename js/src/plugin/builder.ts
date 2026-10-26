@@ -37,11 +37,12 @@ const buildFittedImage = (parent: Shape, node: SpecNode, image: any): Shape => {
 };
 
 /** Build one node (and its children) under `parent`; node coordinates are absolute. */
-export const build = (root: SpecNode, parent: Shape): Shape | null => {
+export const build = (root: SpecNode, parent: Shape, timings?: Record<string, number>): Shape | null => {
   const made: Shape[] = runtime._made = [];
   const buildNode = (node: SpecNode, container: Shape): Shape | null => {
     let shape: Shape | null = null;
     const type = node.t;
+    const started = Date.now();
     if (type === "board" || type === "frame") {
       shape = penpot.createBoard();
       container.appendChild(shape); size(shape, node); place(shape, node);
@@ -105,6 +106,8 @@ export const build = (root: SpecNode, parent: Shape): Shape | null => {
       if (component && typeof node.component === "string") component.name = node.component;
     }
     if (shape) made.push(shape);
+    // per-type time of leaf shapes (containers include their children, so they are not counted)
+    if (timings && !node.children) timings[type] = (timings[type] || 0) + Date.now() - started;
     return shape;
   };
   return buildNode(root, parent);
@@ -118,10 +121,11 @@ export const buildMany = (nodes: SpecNode[], parentId?: string | null) => {
   runtime._fit = [];
   runtime._ranges = [];
   const started = Date.now();
+  const msByType: Record<string, number> = {};
   let count = 0;
   for (const node of nodes) {
     let shape: Shape | null;
-    try { shape = build(node, parent); }
+    try { shape = build(node, parent, msByType); }
     catch (error) {   // roll back partially built shapes so failures leave no debris
       for (const made of (runtime._made || []).slice().reverse()) { try { made.remove(); } catch (_) { /* already gone */ } }
       throw error;
@@ -135,9 +139,21 @@ export const buildMany = (nodes: SpecNode[], parentId?: string | null) => {
     (node.children || []).forEach(collect);
   };
   nodes.forEach(collect);
-  return { built: count, ids: allKeys, ms: Date.now() - started, warnings: runtime.warnings.slice(0, 50),
-           fit: runtime._fit.length, ranges: runtime._ranges.length };
+  // the text post-passes (fitTexts / verifyRanges) run once per build from Python, so the
+  // work items go back with the result instead of staying in this batch's runtime state
+  return { built: count, ids: allKeys, ms: Date.now() - started, msByType, warnings: runtime.warnings.slice(0, 50),
+           fit: runtime._fit.length, ranges: runtime._ranges.length, fitItems: runtime._fit, rangeItems: runtime._ranges };
 };
+
+/** Remove shapes by id in one call (previous builds of sections being rebuilt). Returns how many existed. */
+export const removeMany = (ids: string[]): number => {
+  let removed = 0;
+  for (const id of ids) { const shape = byId(id); if (shape) { shape.remove(); removed++; } }
+  return removed;
+};
+
+/** Which of these ids still exist as shapes (to trust an unchanged section from a previous build). */
+export const existing = (ids: string[]): string[] => ids.filter(id => !!byId(id));
 
 export const groupShapes = (ids: string[], name?: string): string | null => {
   const group = penpot.group(ids.map(byId).filter(Boolean) as Shape[]);

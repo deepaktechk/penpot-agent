@@ -28,7 +28,7 @@ from pbridge.convert.nodes.svg import SvgBuilder
 from pbridge.convert.nodes.text import TextBuilder
 from pbridge.convert.screenshot import ScreenshotProbe
 from pbridge.convert.sections import SectionSplitter
-from pbridge.convert.svg_source import fetch_svg
+from pbridge.convert.svg_source import fetch_svg, prefetch_svgs, svg_urls
 from pbridge.convert.tree import TreeAssembler
 
 SPEC_VERSION = 1
@@ -78,6 +78,8 @@ class Converter:
 
     def convert(self, top: float | None = None, bottom: float | None = None) -> dict[str, Any]:
         """Convert the whole page, or only the sections overlapping [top, bottom]."""
+        if self.ctx.fetch_svg is fetch_svg:   # real downloads (tests stub the loader): all at once, in parallel
+            prefetch_svgs(svg_urls(self.ctx.layout))
         boards = self.sectioner.sections()
         if self.ctx.opts.get("snap", True):
             self.snap(boards)

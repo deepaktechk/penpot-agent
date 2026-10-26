@@ -53,8 +53,10 @@ export const textLines = (element: Element): TextLine[] => {
 export const ellipsisText = (element: HTMLElement, style: CSSStyleDeclaration): string | null => {
   const full = element.innerText; const canvas = document.createElement("canvas").getContext("2d")!;
   canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-  const rect = element.getBoundingClientRect();
-  const available = rect.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  // clientWidth is the layout width before transforms: the canvas measures the text unscaled too
+  // (getBoundingClientRect() of a scale()d floating label is smaller than the box the text lays out in)
+  const layoutWidth = element.clientWidth || element.getBoundingClientRect().width;   // inline boxes have no clientWidth
+  const available = layoutWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
   if (canvas.measureText(full).width <= available + 0.5) return null;
   // binary search for the longest prefix that fits together with "…"
   const ellipsisWidth = canvas.measureText("…").width; let low = 0, high = full.length;

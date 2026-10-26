@@ -134,7 +134,8 @@ export const collectElements = (rootSelector: string | null): CapturedElement[] 
     if (!effective.vis || effective.op < 0.01) continue;
     const rect = element.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) continue;
-    const clip = effective.clip;   // [x, y, w, h]
+    // the element's own overflow clips its children, not its own border/background: use the parent's clip
+    const clip = effectiveOf(element.parentElement).clip;   // [x, y, w, h]
     const clipRight = clip[0] + clip[2], clipBottom = clip[1] + clip[3];
     if (rect.right <= clip[0] || rect.left >= clipRight || rect.bottom <= clip[1] || rect.top >= clipBottom) continue; // fully clipped
     const style = getComputedStyle(element);

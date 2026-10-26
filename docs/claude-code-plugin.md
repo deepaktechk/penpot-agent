@@ -43,7 +43,7 @@ the copy inside the plugin (`${CLAUDE_PLUGIN_ROOT}/pb`, needs `uv`).
 
 ## Tips
 
-- Builds and exports take minutes; let Claude run them with long timeouts.
+- Builds and exports take one to two minutes; let Claude run them with long timeouts.
 - If Claude says the plugin is asleep, click the Penpot tab; `pb` resumes by itself.
 - The Penpot MCP tools (`mcp__penpot__*`) can stay enabled; the skill tells Claude to use `pb` for
   anything large and raw tool calls only for quick probes.

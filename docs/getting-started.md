@@ -62,7 +62,8 @@ pb rebuild --board "Example – Landing Page" --font Inter --fix --hotspots 6 --
 This converts the capture to a design spec, builds it section by section into the board (created
 if needed; `--after '*'` places it right of your other boards), exports it, nudges misplaced
 elements (`--fix`), compares it with the reference and runs the **render gate**. A full landing
-page takes a few minutes.
+page takes one to two minutes (each stage prints its time); later rebuilds keep the sections that
+did not change, so they are faster.
 
 ## 7. Read the results
 

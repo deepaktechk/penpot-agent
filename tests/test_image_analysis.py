@@ -1,4 +1,4 @@
-"""`pb analyze`: palette and flat-coloured boxes measured from design images."""
+"""`pb analyze` (palette and flat-coloured boxes from design images) and the offset audit."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,6 +6,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from pbridge.imaging.analysis import analyze, combined_palette
+from pbridge.imaging.offsets import audit
 
 
 def draw_mockup(path: Path) -> None:
@@ -67,6 +68,35 @@ class ImageAnalysis(unittest.TestCase):
         Image.new("RGB", (400, 400), "#2563EB").save(second)
         merged = combined_palette([self.result, analyze(second)])
         self.assertEqual(merged[0]["hex"], "#2563EB")     # dominant across the two references
+
+
+class OffsetAudit(unittest.TestCase):
+    """`pb audit`: per-element offsets; the parallel audit must equal the serial one."""
+
+    def setUp(self):
+        folder = Path(tempfile.mkdtemp(prefix="pb-audit-"))
+        self.reference, self.render = folder / "reference.png", folder / "render.png"
+        reference_image = Image.new("RGB", (600, 400), "#FFFFFF")
+        render_image = Image.new("RGB", (600, 400), "#FFFFFF")
+        reference_draw, render_draw = ImageDraw.Draw(reference_image), ImageDraw.Draw(render_image)
+        self.elements = []
+        for i in range(12):                     # 12 boxes; even ones are shifted by (+3, -2) in the render
+            x, y = 20 + (i % 4) * 140, 30 + (i // 4) * 120
+            dx, dy = (3, -2) if i % 2 == 0 else (0, 0)
+            reference_draw.rectangle((x, y, x + 60, y + 30), fill="#2563EB")
+            render_draw.rectangle((x + dx, y + dy, x + 60 + dx, y + 30 + dy), fill="#2563EB")
+            self.elements.append({"key": f"e{i}", "id": f"id{i}", "name": f"box {i}", "box": [x, y, 61, 31]})
+        reference_image.save(self.reference); render_image.save(self.render)
+
+    def test_finds_the_shifted_elements(self):
+        issues = audit(self.reference, self.render, self.elements, workers=1)
+        self.assertEqual({issue["key"] for issue in issues}, {f"e{i}" for i in range(0, 12, 2)})
+        self.assertTrue(all((issue["dx"], issue["dy"]) == (3, -2) for issue in issues))
+
+    def test_parallel_audit_equals_serial_audit(self):
+        serial = audit(self.reference, self.render, self.elements, workers=1)
+        parallel = audit(self.reference, self.render, self.elements, workers=4)
+        self.assertEqual(serial, parallel)
 
 
 if __name__ == "__main__":

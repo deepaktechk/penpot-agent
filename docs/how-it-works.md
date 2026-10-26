@@ -27,7 +27,10 @@ are chunked, builds are batched, exports settle, and a sleeping tab is waited ou
    becomes shapes: background/border/shadow boxes, images, inline SVGs, form values, text.
 4. **Build** (`src/pbridge/build/` + the plugin runtime in `js/src/plugin/`). Sections are built by
    key; a rebuild removes the previous shapes of the same key first, so it is idempotent. Large
-   sections are built as a board shell plus batches of 60 nodes, below the per-task time limit.
+   sections are built as a board shell plus packed batches (at most 250 shapes / 400 KB per call),
+   below the per-task time limit. Sections whose content did not change since the last build are
+   kept (content hash per section; `--all` rebuilds them), and progress is saved after every
+   section, so an interrupted build resumes. Text fitting and range checks run once at the end.
 5. **Export and compare.** The board is exported until two renders are identical (fonts and
    images finished loading), then compared with the reference screenshot.
 6. **Audit / autofix** (`--fix`). For every built element, the shift that best aligns the render

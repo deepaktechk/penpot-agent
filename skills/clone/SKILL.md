@@ -10,15 +10,22 @@ Arguments: $ARGUMENTS — a URL, optionally a board name and the main font famil
 
 Follow the `penpot-agent` skill (sections 0–2). In short:
 
-1. **Project folder.** Use the current folder if it has `.pbridge/`; otherwise create one named after
-   the site's domain (`mkdir example_com && cd example_com && pb init`). Run `pb doctor`; if it lists
+**This skill creates a new design: use it only when the user asked for a clone or a new design.**
+To fix or change part of a design that already exists, do not clone again: modify the existing
+board in place (`penpot-agent` skill, "Most important rule"). After the first build, every fix in
+the steps below also touches only the sections or elements that need it.
+
+1. **Project folder.** One folder per site. Use the current folder only if its `.pbridge/` belongs
+   to this same site; otherwise create one named after the site's domain
+   (`mkdir example_com && cd example_com && pb init`). Never capture a second site into another
+   site's folder: its builds would overwrite that site's board. Run `pb doctor`; if it lists
    problems, run the `setup` skill first.
 2. **Inspect the site.** Find the web fonts it really uses (open the page in Chrome or read its CSS),
    cookie banners or chat widgets to hide, carousels or tabs to click. Check fonts with `pb fonts ...`.
 3. **Capture.** `pb -c capture <url> --name <name> --fonts "<Family>"`. The capture gate must PASS.
    If it fails, fix the cause (fonts, `--hide`, `--click`, `--wait`) and capture again; never `--force`.
 4. **Build.** `pb -c rebuild --board "<Board> – Landing Page" --after '*' --font <Family> --fix --hotspots 6 --montage 6`
-   with a long timeout, output saved to a file.
+   with a long timeout, output saved to a file. Later rebuilds keep unchanged sections (`--all` forces all).
 5. **Review.** Read the montage in `.pbridge/diffs/` and the worst sections. For each problem area:
    `pb -c compare --render latest --region x,y,w,h --hotspots 4 --montage 4`, find the cause in
    `.pbridge/captures/<name>/layout.json` vs `.pbridge/specs/<name>.json`, rebuild only those

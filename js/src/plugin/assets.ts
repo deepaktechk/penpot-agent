@@ -57,6 +57,19 @@ export const uploadUrl = async (key: string, url: string): Promise<any> => {
   return image;
 };
 
+/** Let Penpot's server fetch many public URLs at once (one plugin call instead of one per image).
+ *  Returns key -> image descriptor, or key -> {error} for the ones Python must upload another way. */
+export const uploadUrls = async (items: { key: string; url: string }[]): Promise<Record<string, any>> => {
+  const settled = await Promise.allSettled(items.map(item => penpot.uploadMediaUrl(item.key, item.url)));
+  const results: Record<string, any> = {};
+  settled.forEach((outcome, i) => {
+    const key = items[i].key;
+    if (outcome.status === "fulfilled" && outcome.value) { runtime.imgs[key] = outcome.value; results[key] = outcome.value; }
+    else results[key] = { error: String(outcome.status === "rejected" ? (outcome.reason && outcome.reason.message) || outcome.reason : "empty result") };
+  });
+  return results;
+};
+
 /** Register known descriptors (after a re-injection); returns how many images are known. */
 export const registerImages = (descriptors: Record<string, any>): number => {
   for (const [key, image] of Object.entries(descriptors)) runtime.imgs[key] = image;

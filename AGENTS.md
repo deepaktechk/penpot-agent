@@ -53,7 +53,7 @@ npm --prefix js ci                                 # TypeScript toolchain (only 
 
 ```
 uv run ruff check src tests
-uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging   # fast, offline
+uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging tests.test_build_plan tests.test_svg_source tests.test_image_analysis   # fast, offline
 ./pb selftest                     # + fixture capture (needs Chrome + network)
 npm --prefix js run check         # typecheck + name check + build (when js/src changed)
 ```
@@ -61,6 +61,9 @@ npm --prefix js run check         # typecheck + name check + build (when js/src 
 ## Hard-won Penpot / MCP quirks
 
 - `execute_code` request limit ~100 KB → pb chunks data through plugin storage.
+- `penpotUtils.findShapeById` scans the whole document (~600 ms per id on a 1400-shape page); use
+  `pb.byId` (built on `page.getShapeById`, ~0.2 ms). Every plugin property change also gets slower as
+  the document grows (~9 ms per shape on an empty file, ~45 ms at 1400 shapes): send fewer, fuller calls.
 - Plugin storage is wiped when the plugin reloads → pb re-injects the sha-versioned runtime.
 - Each plugin task is killed after ~120 s → big sections are built incrementally / in batches;
   only retry idempotent operations (absolute positions, replace-by-key).

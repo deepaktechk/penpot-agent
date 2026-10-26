@@ -10,6 +10,28 @@ capture in headless Chrome, conversion to a design spec, chunked and retried bui
 exports and pixel-level comparison. Prefer it over raw `mcp__penpot__execute_code` calls for
 anything bigger than a quick probe.
 
+## Most important rule: modify the existing design, never recreate it
+
+When the user asks to fix, change or improve something in a design that already exists, change
+**only that part, in the existing board**. Do not create a new board and do not rebuild the whole
+page. A new design is created **only when the user explicitly asks for one** ("clone this site",
+"make a new design", "start over").
+
+- Find the existing board and the layers concerned (`pb tree`, `pb find`, `pb inspect`, or the
+  user's selection in Penpot: target `selection`).
+- Snapshot what you will touch first (`pb snapshot <target> --label before`), so `pb restore before` undoes it.
+- Use the smallest tool that does the job:
+  - one or a few properties → `pb patch` (move, resize, colours, text...);
+  - one element → `pb update <target>` (planned: `${CLAUDE_PLUGIN_ROOT}/docs/targeted-update.md`);
+    until it exists, `pb patch` or a small `pb build` of just that element into its parent;
+  - a whole section, only when the problem really spans it → `pb rebuild --only secNN`.
+- Never run a full `pb rebuild` / `pb clone`, or pass `--after '*'` (which creates a board), to fix
+  part of a design. If the only way you see is a bigger rebuild, **ask the user first**, saying
+  exactly what would be replaced and that manual edits there would be lost.
+- Check only the region you changed (`pb compare --render latest --region x,y,w,h`).
+- One project folder per site: building a second site in the same `.pbridge/` overwrites the first
+  site's board. New site → new folder + `pb init`.
+
 ## Which `pb` to run
 
 1. `pb` on PATH (installed with `uv tool install git+https://github.com/deepaktechk/penpot-agent`).
@@ -39,8 +61,9 @@ pb doctor                  # JSON report; "problems": [] means ready
    `pb -c capture https://example.com/ --name example --fonts "Inter"` (`--width 1920` default)
 4. Build and check:
    `pb -c rebuild --board "Example – Landing Page" --after '*' --font Inter --fix --hotspots 6 --montage 6`
-   Builds take several minutes: run with a long timeout, save the output to a file and grep for
-   `[render]`, `✗`, `  !`, `ERROR`.
+   Builds take one to two minutes: run with a long timeout, save the output to a file and grep for
+   `[render]`, `✗`, `  !`, `ERROR`, `[rebuild]` (time of each stage). Sections unchanged since the
+   last build are kept (`= secNN (unchanged)`); pass `--all` to rebuild every section.
 5. Read the montage PNG in `.pbridge/diffs/` and the worst sections in the JSON summary.
 
 Shortcut for simple pages: `pb clone URL --board NAME --fonts F --fallback-font F`.
@@ -96,6 +119,8 @@ pb export page --scale 1,2 --format webp        # batch exports into .pbridge/ex
 
 ## 4. Rules
 
+- Modify the existing design; create a new board only when the user asks for a new design
+  (see "Most important rule" at the top).
 - Accuracy first: the reference must be the fully loaded site with the real web font; judge by
   the gate numbers and montages, not by eye alone.
 - Never print or paste the MCP URL: it contains the user's token (`userToken=...`).

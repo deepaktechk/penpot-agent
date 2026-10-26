@@ -22,7 +22,7 @@ import re
 
 from pbridge.convert import fontmetrics
 from pbridge.convert.context import ConversionContext, Element, Node
-from pbridge.convert.css import gradient_char_ranges, paint, parse_gradient, parse_px, split_top
+from pbridge.convert.css import gradient_char_ranges, paint, parse_gradient, parse_px, split_top, uniform_scale_of
 from pbridge.convert.fonts import FontResolver, css_weight
 from pbridge.convert.naming import slug
 from pbridge.convert.screenshot import ScreenshotProbe
@@ -166,6 +166,10 @@ class TextBuilder:
             line_height = float(line_height_css.replace("px", ""))
         else:
             line_height = round(font_size * 1.2, 2)
+        # a scale transform (floating form labels) draws the text smaller than its computed font;
+        # the captured line boxes are already in screen space, only the metrics need scaling
+        scale = uniform_scale_of(element.get("tf"))
+        font_size, line_height = round(font_size * scale, 3), round(line_height * scale, 3)
         element, lines = self._drop_overflow(element, list(element.get("lines") or []))
         if not lines:
             return []
@@ -187,7 +191,7 @@ class TextBuilder:
         node_x, node_width, align_used, grow, left, right = self._box(lines, align)
         text_color = paint(color, element.get("op", 1))
         penpot_font = self.fonts.font_name(family)
-        letter_spacing = parse_px(letter_spacing_css)
+        letter_spacing = parse_px(letter_spacing_css) * scale
         upper = transform == "uppercase"
         italic = style == "italic"
         if not element.get("visible") and self.ctx.opts.get("metric_fit", True):

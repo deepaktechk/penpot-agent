@@ -43,6 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
+    # progress must be visible line by line even when the output is redirected to a log file
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(line_buffering=True)
     try:
         exit_code = args.handler(args)      # every sub-parser sets `handler` to its cmd_<name> function
     except KeyboardInterrupt:

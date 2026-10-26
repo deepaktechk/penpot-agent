@@ -13,6 +13,7 @@ import sys
 from pbridge.capture import CaptureOptions, capture_site, capture_widths
 from pbridge.cli.support import TARGET_HELP, Args, get_bridge, out, parse_region, render_for, require_reference, resolve_target
 from pbridge.project import ProjectState
+from pbridge.timing import StageTimer
 from pbridge.workflows import audit_render, build_responsive, build_spec, compare_render, convert_capture, run_qa
 
 
@@ -96,25 +97,34 @@ def cmd_clone(args: Args) -> None:
 def cmd_rebuild(args: Args) -> int:
     """convert (from current capture) -> build -> [autofix] -> compare -> render quality gate."""
     compact = Args(compact=True)
+    timer = StageTimer("rebuild")
     state = ProjectState.open()
-    out(convert_capture(state, state.config.get("capture"), fallback_font=args.font, system_font=args.system_font,
-                        font_map=args.font_map), compact)
+    with timer.stage("convert"):
+        out(convert_capture(state, state.config.get("capture"), fallback_font=args.font, system_font=args.system_font,
+                            font_map=args.font_map), compact)
     spec_path = str(state.spec_path())
     bridge = get_bridge(args)
-    out(build_spec(bridge, spec_path, page_board=args.board or state.config.get("page_board_name") or "Page",
-                   only=args.only.split(",") if args.only else None, font=args.font, after=getattr(args, "after", None),
-                   page=args.page), compact)
+    with timer.stage("build"):
+        out(build_spec(bridge, spec_path, page_board=args.board or state.config.get("page_board_name") or "Page",
+                       only=args.only.split(",") if args.only else None, font=args.font, after=getattr(args, "after", None),
+                       page=args.page, rebuild_all=args.all), compact)
     fresh_render = Args(render=None, target="page", fast=False)
     reference = require_reference(bridge)
+    with timer.stage("export"):
+        render = render_for(bridge, fresh_render)   # settled: re-exported until two exports are identical
     if args.fix:
-        print("[rebuild] audit + autofix…", file=sys.stderr)
-        out(audit_render(bridge, reference, render_for(bridge, fresh_render), limit=1000, fix=True, max_shift=3), compact)
-    out(compare_render(bridge, reference, render_for(bridge, fresh_render), n_hotspots=args.hotspots, n_montage=args.montage), compact)
-    latest = bridge.state.latest_render()
-    if not latest:
-        raise SystemExit("no renders yet")
-    ok, summary = run_qa(bridge.state, str(latest), spec_path)
-    out(summary, compact)
+        with timer.stage("audit+autofix"):
+            fixed = audit_render(bridge, reference, render, limit=1000, fix=True, max_shift=3)
+            out(fixed, compact)
+        if fixed.get("moved"):
+            # only positions changed and images/fonts were already loaded for the settled export:
+            # one export shows the moves, no need to settle again (saves 1-2 exports of ~10 s)
+            with timer.stage("export"):
+                render = render_for(bridge, Args(render=None, target="page", fast=True))
+    with timer.stage("compare+qa"):
+        out(compare_render(bridge, reference, render, n_hotspots=args.hotspots, n_montage=args.montage), compact)
+        ok, summary = run_qa(bridge.state, render, spec_path)
+    out({**summary, "seconds": timer.summary()}, compact)
     return 0 if ok else 1
 
 
@@ -209,6 +219,8 @@ def add_rebuild(subparsers) -> None:
     parser.add_argument("--fix", action="store_true", help="audit + autofix after building")
     parser.add_argument("--after", help="place a new page board right of this board ('*' = right of everything)")
     parser.add_argument("--page", help="build on this Penpot page (created when missing)")
+    parser.add_argument("--all", action="store_true",
+                        help="rebuild every section, also those whose spec did not change since the last build")
     parser.set_defaults(handler=cmd_rebuild)
 
 

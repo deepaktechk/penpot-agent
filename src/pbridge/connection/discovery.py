@@ -1,4 +1,4 @@
-"""Find the Penpot MCP endpoint and keep its token out of every output.
+"""Find the Penpot MCP endpoint and the backend API, and keep their tokens out of every output.
 
 Resolution order:
   1. env PENPOT_MCP_URL
@@ -8,7 +8,8 @@ Resolution order:
 In 3 and 4, the first `mcpServers` entry whose name contains "penpot" (any case) is used.
 
 The URL embeds a user token (`?userToken=...`): it is never printed or logged.
-Anything that may contain it must go through `redact()` first.
+The backend API (`backend.py`) uses a personal access token from env PENPOT_ACCESS_TOKEN.
+Anything that may contain either token must go through `redact()` first.
 """
 from __future__ import annotations
 
@@ -59,6 +60,27 @@ def discover_mcp_url(state: ProjectState | None = None) -> str:
                        "or set PENPOT_MCP_URL - see docs/penpot-setup.md")
 
 
+DEFAULT_BACKEND = "https://design.penpot.app"
+
+
+def discover_backend_url(state: ProjectState | None = None) -> str:
+    """Base URL of the Penpot backend API: env PENPOT_URL, else config "penpot_url", else design.penpot.app."""
+    url = os.environ.get("PENPOT_URL") or (state.config.get("penpot_url") if state else None) or DEFAULT_BACKEND
+    return url.rstrip("/")
+
+
+def access_token() -> str | None:
+    """Penpot personal access token, from env PENPOT_ACCESS_TOKEN only.
+
+    Never read from project files: .pbridge/ can be shared or committed by mistake.
+    """
+    token = os.environ.get("PENPOT_ACCESS_TOKEN", "").strip()
+    return token or None
+
+
 def redact(text: object) -> str:
-    """Remove user tokens from any string before showing it."""
-    return re.sub(r"(userToken=)[^&\s\"']+", r"\1***", str(text))
+    """Remove user tokens and access tokens from any string before showing it."""
+    shown = re.sub(r"(userToken=)[^&\s\"']+", r"\1***", str(text))
+    shown = re.sub(r"(Authorization:\s*Token\s+)[^\s\"',;)]+", r"\1***", shown, flags=re.IGNORECASE)
+    token = access_token()
+    return shown.replace(token, "***") if token else shown

@@ -43,7 +43,20 @@ export const isArray = Array.isArray;
 export const toNumber = (value: unknown, fallback = 0): number =>
   (value === undefined || value === null || isNaN(+(value as number))) ? fallback : +(value as number);
 
-export const byId = (id: string | null | undefined): Shape | null => id ? penpotUtils.findShapeById(id) : null;
+/** Shape by id: `page.getShapeById` is a map lookup (~0.2 ms); `penpotUtils.findShapeById` scans the
+ *  whole document (~600 ms per id on a 1400-shape page), so it is never used. Current page first. */
+export const byId = (id: string | null | undefined): Shape | null => {
+  if (!id) return null;
+  const current = penpot.currentPage;
+  const found = current && current.getShapeById(id);
+  if (found) return found;
+  for (const page of penpotUtils.getPages()) {
+    if (current && page.id === current.id) continue;
+    const shape = page.getShapeById && page.getShapeById(id);
+    if (shape) return shape;
+  }
+  return null;
+};
 
 export const warn = (message: unknown): void => { runtime.warnings.push(String(message)); };
 

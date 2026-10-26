@@ -204,8 +204,8 @@
     const full = element.innerText;
     const canvas = document.createElement("canvas").getContext("2d");
     canvas.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const rect = element.getBoundingClientRect();
-    const available = rect.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const layoutWidth = element.clientWidth || element.getBoundingClientRect().width;
+    const available = layoutWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     if (canvas.measureText(full).width <= available + 0.5) return null;
     const ellipsisWidth = canvas.measureText("\u2026").width;
     let low = 0, high = full.length;
@@ -392,7 +392,7 @@
       if (!effective.vis || effective.op < 0.01) continue;
       const rect = element.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) continue;
-      const clip = effective.clip;
+      const clip = effectiveOf(element.parentElement).clip;
       const clipRight = clip[0] + clip[2], clipBottom = clip[1] + clip[3];
       if (rect.right <= clip[0] || rect.left >= clipRight || rect.bottom <= clip[1] || rect.top >= clipBottom) continue;
       const style = getComputedStyle(element);

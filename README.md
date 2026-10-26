@@ -108,6 +108,7 @@ Details: [docs/how-it-works.md](docs/how-it-works.md) · architecture: [docs/arc
 | [Spec format](docs/spec-format.md) | the JSON design format `pb build` accepts |
 | [How it works](docs/how-it-works.md) | capture, conversion, accuracy techniques, quality gates |
 | [Architecture](docs/architecture.md) | code map for contributors |
+| [Targeted update](docs/targeted-update.md) | design of `pb update`: change one part of a design in place (planned) |
 | [Troubleshooting](docs/troubleshooting.md) | common problems and fixes |
 
 ## Limitations

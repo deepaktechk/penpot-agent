@@ -58,6 +58,18 @@ def parse_clip_polygon(clip: str | None, x: float, y: float, width: float, heigh
     return "M " + " L ".join(f"{point_x:.2f} {point_y:.2f}" for point_x, point_y in points) + " Z"
 
 
+def uniform_scale_of(transform: str | None) -> float:
+    """Scale factor of a computed `matrix(s, 0, 0, s, e, f)` transform; 1.0 for anything else
+    (no transform, rotation, skew or a non-uniform scale)."""
+    match = re.match(r"matrix\(([^)]*)\)", transform or "")
+    if not match:
+        return 1.0
+    scale_x, skew_y, skew_x, scale_y = [float(value) for value in match.group(1).split(",")[:4]]
+    if abs(skew_y) > 1e-6 or abs(skew_x) > 1e-6 or abs(scale_x - scale_y) > 1e-4 or scale_x <= 0:
+        return 1.0
+    return scale_x
+
+
 def rotation_of(transform: str | None) -> float:
     """Rotation angle (degrees) of a computed `matrix(a, b, c, d, e, f)` transform."""
     match = re.match(r"matrix\(([^)]*)\)", transform or "")

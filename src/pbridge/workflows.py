@@ -50,9 +50,10 @@ def convert_capture(state: ProjectState, capture: str | None = None, fallback_fo
 # ---------------------------------------------------------------------- build
 def build_spec(bridge: Bridge, spec_path: str, parent: str | None = None, page_board: str | None = None,
                only: list[str] | None = None, replace: bool = True, font: str | None = None,
-               after: str | None = None, page: str | None = None) -> dict[str, Any]:
+               after: str | None = None, page: str | None = None, rebuild_all: bool = True) -> dict[str, Any]:
     """Build a spec file. With page_board, (create and) size that board and build into it.
-    With page, open (or create) that Penpot page first."""
+    With page, open (or create) that Penpot page first. rebuild_all=False keeps sections whose
+    content did not change since the last build."""
     from pbridge.build import PageBoards, SpecBuilder
     from pbridge.build.validate import validate_spec
     spec = json.loads(Path(spec_path).read_text())
@@ -67,7 +68,8 @@ def build_spec(bridge: Bridge, spec_path: str, parent: str | None = None, page_b
         page_height = spec.get("height") if isinstance(spec, dict) else None
         # on another page, look the board up by name there (the remembered id may be on a different page)
         parent = PageBoards(bridge).ensure(page_board, page_width, page_height, after=after, reuse_stored_id=not page)
-    report = SpecBuilder(bridge).build(spec, parent=parent, only=only, replace=replace, default_font=font)
+    report = SpecBuilder(bridge).build(spec, parent=parent, only=only, replace=replace, default_font=font,
+                                       rebuild_all=rebuild_all)
     report["spec_warnings"] = check.warnings
     return {key: (value[:20] if isinstance(value, list) else value) for key, value in report.items()}
 

@@ -53,7 +53,7 @@ Code map: [docs/architecture.md](docs/architecture.md).
 
 ```bash
 uv run ruff check src tests                                                      # lint
-uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging   # fast, offline
+uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging tests.test_build_plan tests.test_svg_source tests.test_image_analysis   # fast, offline
 ./pb selftest                     # + end-to-end capture of tests/fixtures/tricky.html (Chrome + network)
 ./pb selftest --build             # + builds the fixture in Penpot on a scratch board (plugin connected)
 npm --prefix js run check         # TypeScript: typecheck + naming lint + build

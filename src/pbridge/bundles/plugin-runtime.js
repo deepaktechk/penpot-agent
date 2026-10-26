@@ -13,7 +13,18 @@
   };
   var isArray = Array.isArray;
   var toNumber = (value, fallback = 0) => value === void 0 || value === null || isNaN(+value) ? fallback : +value;
-  var byId = (id) => id ? penpotUtils.findShapeById(id) : null;
+  var byId = (id) => {
+    if (!id) return null;
+    const current = penpot.currentPage;
+    const found = current && current.getShapeById(id);
+    if (found) return found;
+    for (const page of penpotUtils.getPages()) {
+      if (current && page.id === current.id) continue;
+      const shape = page.getShapeById && page.getShapeById(id);
+      if (shape) return shape;
+    }
+    return null;
+  };
   var warn = (message) => {
     runtime.warnings.push(String(message));
   };
@@ -446,11 +457,12 @@
     }
     return shape;
   };
-  var build = (root, parent) => {
+  var build = (root, parent, timings) => {
     const made = runtime._made = [];
     const buildNode = (node, container) => {
       let shape = null;
       const type = node.t;
+      const started = Date.now();
       if (type === "board" || type === "frame") {
         shape = penpot.createBoard();
         container.appendChild(shape);
@@ -546,6 +558,7 @@
         if (component && typeof node.component === "string") component.name = node.component;
       }
       if (shape) made.push(shape);
+      if (timings && !node.children) timings[type] = (timings[type] || 0) + Date.now() - started;
       return shape;
     };
     return buildNode(root, parent);
@@ -557,11 +570,12 @@
     runtime._fit = [];
     runtime._ranges = [];
     const started = Date.now();
+    const msByType = {};
     let count = 0;
     for (const node of nodes) {
       let shape;
       try {
-        shape = build(node, parent);
+        shape = build(node, parent, msByType);
       } catch (error) {
         for (const made of (runtime._made || []).slice().reverse()) {
           try {
@@ -583,11 +597,26 @@
       built: count,
       ids: allKeys,
       ms: Date.now() - started,
+      msByType,
       warnings: runtime.warnings.slice(0, 50),
       fit: runtime._fit.length,
-      ranges: runtime._ranges.length
+      ranges: runtime._ranges.length,
+      fitItems: runtime._fit,
+      rangeItems: runtime._ranges
     };
   };
+  var removeMany = (ids) => {
+    let removed = 0;
+    for (const id of ids) {
+      const shape = byId(id);
+      if (shape) {
+        shape.remove();
+        removed++;
+      }
+    }
+    return removed;
+  };
+  var existing = (ids) => ids.filter((id) => !!byId(id));
   var groupShapes = (ids, name) => {
     const group = penpot.group(ids.map(byId).filter(Boolean));
     if (group && name) group.name = name;
@@ -861,6 +890,18 @@
     runtime.imgs[key] = image;
     return image;
   };
+  var uploadUrls = async (items) => {
+    const settled = await Promise.allSettled(items.map((item) => penpot.uploadMediaUrl(item.key, item.url)));
+    const results = {};
+    settled.forEach((outcome, i) => {
+      const key = items[i].key;
+      if (outcome.status === "fulfilled" && outcome.value) {
+        runtime.imgs[key] = outcome.value;
+        results[key] = outcome.value;
+      } else results[key] = { error: String(outcome.status === "rejected" ? outcome.reason && outcome.reason.message || outcome.reason : "empty result") };
+    });
+    return results;
+  };
   var registerImages = (descriptors) => {
     for (const [key, image] of Object.entries(descriptors)) runtime.imgs[key] = image;
     return Object.keys(runtime.imgs).length;
@@ -924,6 +965,8 @@
     verifyRanges,
     groupShapes,
     ungroup,
+    removeMany,
+    existing,
     // reading
     serialize,
     tree,
@@ -935,6 +978,7 @@
     crc32,
     uploadB64,
     uploadUrl,
+    uploadUrls,
     registerImages,
     toBase64,
     exportShape,
