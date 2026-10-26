@@ -16,8 +16,8 @@ from pbridge.cli.support import TARGET_HELP, Args, get_bridge, out, parse_region
 from pbridge.project import ProjectState
 from pbridge.run_cache import RunCache, file_digest, rebuild_key
 from pbridge.timing import StageTimer
-from pbridge.workflows import (audit_render, build_responsive, build_spec, compare_render, convert_capture, file_revision,
-                               run_qa)
+from pbridge.workflows import (LAYOUT_MODES, audit_render, build_responsive, build_spec, compare_render, convert_capture,
+                               file_revision, resolve_layout, run_qa)
 
 
 def _widths(text: str) -> list[int]:
@@ -66,28 +66,31 @@ def cmd_verify(args: Args) -> int:
 def cmd_responsive(args: Args) -> None:
     """Capture the page at several widths and build one board per width, side by side."""
     state = ProjectState.open()
+    layout_mode = resolve_layout(state, args.layout)     # asked before the captures, not after them
     captures = capture_widths(state, _capture_options(args), _widths(args.widths))
     out(build_responsive(state, get_bridge(args), captures, board=args.board, font=args.font, system_font=args.system_font,
-                         font_map=args.font_map), args)
+                         font_map=args.font_map, layout_mode=layout_mode), args)
 
 
 def cmd_convert(args: Args) -> None:
     state = ProjectState.open()
     out(convert_capture(state, args.capture, fallback_font=args.fallback_font, system_font=getattr(args, "system_font", "Inter"),
                         flat=args.flat, font_map=args.font_map, region=parse_region(args.region), out_path=args.out,
-                        check_fonts=not getattr(args, "no_font_check", False)), args)
+                        check_fonts=not getattr(args, "no_font_check", False), layout_mode=resolve_layout(state, args.layout)), args)
 
 
 def cmd_clone(args: Args) -> None:
     """capture -> convert -> build -> compare in one go."""
     compact = Args(compact=True)
     state = ProjectState.open(); state.init()
+    layout_mode = resolve_layout(state, args.layout)     # the user's choice, before any work
     print("1/4 capture…", file=sys.stderr)
     out(capture_site(state, CaptureOptions(url=args.url, name=args.name, width=args.width, fonts=args.fonts, hide=args.hide,
                                            click=args.click, wait=1500)))
     state = ProjectState.open()
     print("2/4 convert…", file=sys.stderr)
-    out(convert_capture(state, state.config["capture"], fallback_font=args.fallback_font, font_map=args.font_map), compact)
+    out(convert_capture(state, state.config["capture"], fallback_font=args.fallback_font, font_map=args.font_map,
+                        layout_mode=layout_mode), compact)
     print("3/4 build…", file=sys.stderr)
     bridge = get_bridge(args)
     out(build_spec(bridge, str(state.spec_path()), page_board=args.board, font=args.fallback_font), compact)
@@ -102,9 +105,10 @@ def cmd_rebuild(args: Args) -> int:
     compact = Args(compact=True)
     timer = StageTimer("rebuild")
     state = ProjectState.open()
+    layout_mode = resolve_layout(state, args.layout)
     with timer.stage("convert"):
         out(convert_capture(state, state.config.get("capture"), fallback_font=args.font, system_font=args.system_font,
-                            font_map=args.font_map, use_cache=not args.all), compact)
+                            font_map=args.font_map, use_cache=not args.all, layout_mode=layout_mode), compact)
     spec_path = str(state.spec_path())
     bridge = get_bridge(args)
     cache = RunCache(state)
@@ -165,6 +169,13 @@ def _add_page_args(parser) -> None:
     parser.add_argument("--retries", type=int, default=3, help="attempts when the capture gate fails (default 3)")
 
 
+def _add_layout_arg(parser) -> None:
+    """--layout: the user's choice between fixed positions and Penpot auto layout (saved per project)."""
+    parser.add_argument("--layout", choices=LAYOUT_MODES,
+                        help="absolute: every layer at fixed x/y; auto: Penpot flex layouts where they reproduce the page "
+                             "exactly. Saved for the project; a new project without one is asked")
+
+
 def add_capture(subparsers) -> None:
     parser = subparsers.add_parser("capture", help="capture a website (screenshot + layout)")
     _add_page_args(parser)
@@ -192,6 +203,7 @@ def add_responsive(subparsers) -> None:
     parser.add_argument("--font", default="Inter", help="fallback font for families missing in Penpot (default Inter)")
     parser.add_argument("--system-font", default="Inter", help="font for -apple-system/system-ui stacks")
     parser.add_argument("--font-map", help="Web Font=Penpot Font,...")
+    _add_layout_arg(parser)
     parser.set_defaults(handler=cmd_responsive)
 
 
@@ -205,6 +217,7 @@ def add_convert(subparsers) -> None:
     parser.add_argument("--no-font-check", action="store_true", help="do not ask Penpot which fonts exist (offline)")
     parser.add_argument("--font-map", help="Web Font=Penpot Font,...")
     parser.add_argument("--flat", action="store_true", help="no groups: every shape directly in its section board")
+    _add_layout_arg(parser)
     parser.set_defaults(handler=cmd_convert)
 
 
@@ -219,6 +232,7 @@ def add_clone(subparsers) -> None:
     parser.add_argument("--click", help="comma list of CSS selectors to click first")
     parser.add_argument("--fallback-font", default="Inter", help="font for families missing in Penpot")
     parser.add_argument("--font-map", help="Web Font=Penpot Font,...")
+    _add_layout_arg(parser)
     parser.set_defaults(handler=cmd_clone)
 
 
@@ -238,6 +252,7 @@ def add_rebuild(subparsers) -> None:
                         help="rebuild every section and re-convert, also when nothing changed since the last run")
     parser.add_argument("--no-staging", action="store_true",
                         help="build every section in place instead of on temporary pages (slower on big pages)")
+    _add_layout_arg(parser)
     parser.set_defaults(handler=cmd_rebuild)
 
 

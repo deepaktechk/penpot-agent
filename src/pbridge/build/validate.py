@@ -23,7 +23,7 @@ TYPE_KEYS = {
 TEXT_KEYS = {"text", "font", "weight", "italic", "size", "lh", "lhr", "ls", "color", "upper", "lower", "cap", "deco", "align",
              "valign", "grow", "fitW", "ranges"}
 RANGE_STYLE_KEYS = {"font", "weight", "italic", "size", "lh", "lhr", "ls", "color", "upper", "lower", "cap", "deco"}
-LAYOUT_KEYS = {"type", "dir", "gap", "padding", "align", "justify", "alignContent", "wrap", "sizing", "columns", "rows"}
+LAYOUT_KEYS = {"type", "dir", "gap", "padding", "align", "justify", "alignContent", "wrap", "sizing", "columns", "rows", "pin"}
 CHILD_KEYS = {"sizing", "alignSelf", "margin", "absolute", "zIndex", "minW", "maxW", "minH", "maxH", "cell"}
 NEEDS_BOX = {"board", "frame", "rect", "ellipse", "image", "svg"}
 HEX_RE = re.compile(r"^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8}|[0-9A-Fa-f]{3})$")

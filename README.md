@@ -38,6 +38,8 @@ measurable accuracy.
 - **Website → Penpot clone** — sections become named boards, text keeps the browser's exact line
   breaks, SVGs become editable vectors, `oklch()`/`lab()` colours, gradient text, line-clamps,
   pseudo-element decorations and coloured underlines are reproduced.
+- **Your choice of positioning** — every layer at a fixed x/y, or Penpot auto layout (flex) wherever it
+  reproduces the page exactly, so editing a text moves its neighbours. Both pass the same accuracy gate.
 - **Visual QA built in** — page and per-section diff %, hotspot montages, heat overlays,
   per-element offset audit with automatic nudging, and a quality gate that fails on regressions.
 - **Reliable over MCP** — payloads are chunked past the ~100 KB request limit, the in-plugin
@@ -77,7 +79,7 @@ export PENPOT_MCP_URL="https://design.penpot.app/mcp/stream?userToken=..."   # s
 mkdir example && cd example && pb init
 pb doctor                                    # "problems": [] means ready
 pb capture https://example.com --fonts "Inter"
-pb rebuild --board "Example – Landing Page" --font Inter --fix --montage 6
+pb rebuild --board "Example – Landing Page" --font Inter --layout auto --fix --montage 6   # or --layout absolute
 ```
 Open the Penpot file: the board is there. The `rebuild` output ends with the quality gate verdict;
 the montage of the worst areas is in `.pbridge/diffs/`. Walkthrough: [docs/getting-started.md](docs/getting-started.md).

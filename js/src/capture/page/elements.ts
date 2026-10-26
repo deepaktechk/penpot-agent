@@ -4,7 +4,7 @@
 // element), is a replaced element (img, svg, video, canvas), is a structural container, or
 // has several children. Its parent `p` is the nearest EMITTED ancestor, so the converter
 // sees a compact tree.
-import type { CapturedElement, FontTuple, PseudoBox } from "../../shared/layout-types";
+import type { CapturedElement, ContainerLayout, FontTuple, PseudoBox } from "../../shared/layout-types";
 import { createEffectiveResolver } from "./effective";
 import { round2, SVGNS, toRect } from "./geometry";
 import { sanitizeSvg } from "./svg";
@@ -89,6 +89,19 @@ const boxFields = (record: CapturedElement, style: CSSStyleDeclaration): void =>
       shadow: style.boxShadow !== "none" ? style.boxShadow : undefined,
       clip: style.clipPath !== "none" ? style.clipPath : undefined, blur: style.backdropFilter !== "none" ? style.backdropFilter : undefined,
       filter: style.filter !== "none" ? style.filter : undefined, mix: style.mixBlendMode !== "normal" ? style.mixBlendMode : undefined };
+  }
+};
+
+/** Flex / grid container layout (used by `--layout auto`); "normal" gaps are 0. */
+const layoutFields = (record: CapturedElement, style: CSSStyleDeclaration): void => {
+  const display = style.display;
+  if (display.includes("flex") || display.includes("grid")) {
+    const pixels = (value: string) => parseFloat(value) || 0;
+    const layout: ContainerLayout = { d: display.includes("flex") ? "flex" : "grid", dir: style.flexDirection, wrap: style.flexWrap,
+      jc: style.justifyContent, ai: style.alignItems, gap: [pixels(style.rowGap), pixels(style.columnGap)],
+      inset: [pixels(style.paddingTop) + pixels(style.borderTopWidth), pixels(style.paddingRight) + pixels(style.borderRightWidth),
+              pixels(style.paddingBottom) + pixels(style.borderBottomWidth), pixels(style.paddingLeft) + pixels(style.borderLeftWidth)] };
+    record.lay = layout;
   }
 };
 
@@ -177,6 +190,7 @@ export const collectElements = (rootSelector: string | null): CapturedElement[] 
     if (ownText) textFields(record, html, style, effective.clip);
     boxFields(record, style);
     pseudoFields(record, element);
+    layoutFields(record, style);
     if (record.text || record.box || record.input || record.pseudo || CONTAINERS.has(tag) || element.children.length > 1) emit(record, element);
   }
   return records;

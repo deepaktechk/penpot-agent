@@ -29,6 +29,7 @@ src/pbridge/           Python package
     css/               pure parsers: colors, gradients, shadows/radius/clip, values
     nodes/             element -> shapes: boxes, images, svg, text, inputs, decorations
     tree.py            DOM subtree -> nested groups
+    layout.py          --layout auto: verified Penpot flex layouts (simulator of Penpot's measured rules)
     sections.py        page -> section boards
     converter.py       facade wiring the parts together
   build/               spec -> Penpot: builder, plan (batch packing, section hashes), page_board,

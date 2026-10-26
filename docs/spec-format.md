@@ -37,7 +37,22 @@ Coordinates are absolute in the page: with `--page-board`, they are relative to 
 
 Type-specific keys:
 
-- **board**: `clip` (clip content), `flex` (flex layout properties)
+- **board**: `clip` (clip content), `layout` (auto layout, below), `flex` (raw Penpot flex layout properties)
+
+Auto layout (written by `--layout auto`, or by hand):
+
+- board `layout`: `{"type": "flex" | "grid", "dir": "row" | "column", "gap": 8 | [row, column],
+  "padding": 8 | [vertical, horizontal] | [top, right, bottom, left], "justify": "start" | "center" | "end" |
+  "space-between" | "space-around" | "space-evenly", "align": "start" | "center" | "end" | "stretch",
+  "wrap": bool, "sizing": [horizontal, vertical], "pin": bool}` (`"fix"`, `"auto"` = hug, `"fill"`); grid:
+  `"columns"`, `"rows"` tracks (`"1fr"`, `"200px"`, `"50%"`, `"auto"`). `pin` (flex, written by
+  `--layout auto`): the children's `x`/`y` are where they must end up, and the build settles them there;
+  without it the layout alone places the children and their `x`/`y` are placeholders.
+- child `child`: `{"sizing": [h, v], "alignSelf": ..., "margin": 8 | [...], "absolute": true, "zIndex": n,
+  "cell": [row, column]}`; `absolute` children keep their `x`/`y`.
+- In a flex board the children list is the flow order and the paint order from the bottom. The builder
+  creates the children at their `x`/`y` first and switches the layout on afterwards; Penpot recalculates
+  layouts asynchronously, so absolute children are placed and flow children checked in later calls.
 - **path / line**: `d` (SVG path data, absolute coordinates)
 - **text**: `text` — see below
 - **image**: `img` (asset key), `fit` (`fill`, `cover`, `contain`), `nat` (natural size `[w, h]`),

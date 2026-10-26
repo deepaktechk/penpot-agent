@@ -55,18 +55,29 @@ pb doctor                  # JSON report; "problems": [] means ready
 
 ## 1. Clone a website
 
+0. **Ask the user how layers are positioned — before capturing, every new clone.** This is the user's
+   choice, never yours: do not pick one, do not assume one from a previous project. Ask with a question
+   (the AskUserQuestion tool in Claude Code) offering exactly these two options:
+   - **Absolute** — every layer at a fixed x/y. Pixel-exact; nothing moves when the design is edited.
+   - **Auto layout** — Penpot flex layouts wherever they reproduce the page exactly (edit a text and
+     its neighbours move), fixed x/y everywhere else. Same accuracy gate.
+   Pass the answer as `--layout absolute` or `--layout auto` on the first `pb rebuild` / `pb clone`;
+   pb saves it for the project. If pb stops with "How should pb position the layers…", you skipped
+   this step: ask now. Existing projects keep their saved choice (change it only when the user asks).
 1. Look at the live site first: which web fonts, cookie banners, carousels? (`--hide`, `--click`)
 2. Check the fonts exist in Penpot: `pb fonts Inter "DM Sans"`; missing ones need `--font`/`--font-map`.
 3. Capture (the capture gate must PASS; never `--force` a failed capture into the reference):
    `pb -c capture https://example.com/ --name example --fonts "Inter"` (`--width 1920` default)
 4. Build and check:
-   `pb -c rebuild --board "Example – Landing Page" --after '*' --font Inter --fix --hotspots 6 --montage 6`
+   `pb -c rebuild --board "Example – Landing Page" --after '*' --font Inter --layout <absolute|auto> --fix --hotspots 6 --montage 6`
    Builds take one to two minutes: run with a long timeout, save the output to a file and grep for
    `[render]`, `✗`, `  !`, `ERROR`, `[rebuild]` (time of each stage). Sections unchanged since the
    last build are kept (`= secNN (unchanged)`); pass `--all` to rebuild every section.
 5. Read the montage PNG in `.pbridge/diffs/` and the worst sections in the JSON summary.
 
-Shortcut for simple pages: `pb clone URL --board NAME --fonts F --fallback-font F`.
+Shortcut for simple pages: `pb clone URL --board NAME --fonts F --fallback-font F --layout <absolute|auto>`.
+With `--layout auto` the build report has `layout_boards_settled` and `layout_worst_px` (flow children
+off their browser position after settling; a warning above 0.5 px). Autofix leaves flow children alone.
 
 ## 2. Iterate to pixel accuracy
 
@@ -116,6 +127,13 @@ pb verify https://built.site --target "Site"    # handoff QA: built site vs Penp
 pb page list | pb version save "before" | pb code page --out ./code | pb tokens --dry
 pb export page --scale 1,2 --format webp        # batch exports into .pbridge/exports/
 ```
+
+**New designs from a prompt** (only when the user asks for a new design, not a clone): if the
+`frontend-design` skill is available (Anthropic's official plugin, `frontend-design@claude-plugins-official`),
+use it first for the aesthetic direction — palette, typefaces, layout plan, reviewed against the brief —
+then write that plan as a spec (`examples/prompt/`), `pb validate` and `pb build` it. Never use it for
+clones, rebuilds or fixes of an existing design: those reproduce the source exactly, and its job is to
+make new, distinctive choices.
 
 ## 4. Rules
 

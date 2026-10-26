@@ -8,7 +8,8 @@
 //
 // The public surface below is a contract with the Python side - keep names stable.
 import { lint, stats } from "./analysis";
-import { buildMany, build, existing, groupShapes, orderChildren, removeMany, ungroup } from "./builder";
+import { buildMany, build, existing, finishFlex, groupShapes, orderChildren, removeMany, ungroup } from "./builder";
+import { layoutState, placeAbsolute, setFlexProps } from "./layout";
 import { chunkPut, chunkTake } from "./chunks";
 import { font, variant } from "./fonts";
 import { paint, shadows, strokes } from "./paints";
@@ -30,6 +31,7 @@ const api = Object.assign(runtime, {
   font, variant, paint, strokes, shadows,
   // building
   makeText, build, buildMany, fitTexts, verifyRanges, gapsBetween, groupShapes, ungroup, removeMany, existing, orderChildren,
+  finishFlex, layoutState, setFlexProps, placeAbsolute,
   stageBegin, stageFinish, stageTransfer, stageCleanup,
   // reading
   serialize, tree, find,

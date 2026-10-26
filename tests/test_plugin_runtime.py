@@ -304,3 +304,41 @@ class StagingCleanup(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# just enough of Penpot for pb.buildMany: boards, rectangles, flex layouts (layoutChild appears with the layout)
+BUILD_STUBS = """
+    let counter = 0;
+    const shapes = {};
+    const makeShape = (type) => {
+      const shape = {id: type + '-' + (++counter), type, x: 0, y: 0, width: 100, height: 100, children: [], name: '', fills: [],
+        resize(width, height) { this.width = width; this.height = height; },
+        appendChild(child) { child.parent = this; this.children.push(child); if (this.flex) child.layoutChild = {}; },
+        setParentIndex() {},
+        addFlexLayout() { this.flex = {}; this.children.forEach(child => { child.layoutChild = {}; }); return this.flex; },
+        get parentIndex() { return this.parent ? this.parent.children.indexOf(this) : 0; }};
+      shapes[shape.id] = shape;
+      return shape;
+    };
+    const root = makeShape('root');
+    const page = {id: 'page', getShapeById: id => shapes[id] || null, root};
+    const penpot = {currentPage: page, root, createBoard: () => makeShape('board'), createRectangle: () => makeShape('rect')};
+    return {penpot, penpotUtils: {}};"""
+
+
+@unittest.skipUnless(shutil.which("node") and PLUGIN_RUNTIME.exists(), "node or plugin-runtime.js missing")
+class FlexSettling(unittest.TestCase):
+    def test_absolute_children_are_recorded_where_the_builder_placed_them(self):
+        # getfieldy.com video thumbnail: a contain-fitted picture is centred in its 768x500 box (y + 34); the
+        # settle step put absolute children back at the node's x/y, i.e. the box's top-left, 34 px too high
+        spec = {"t": "board", "key": "card", "x": 0, "y": 0, "w": 768, "h": 600,
+                "layout": {"type": "flex", "dir": "column", "gap": 0, "pin": True},
+                "children": [{"t": "image", "key": "video", "img": "thumb", "fit": "contain", "x": 0, "y": 0, "w": 768, "h": 500,
+                              "child": {"absolute": True}},
+                             {"t": "rect", "key": "caption", "x": 0, "y": 500, "w": 768, "h": 100, "child": {"sizing": ["fix", "fix"]}}]}
+        result = run(f"pb.imgs.thumb = {{width: 768, height: 432}}; const built = pb.buildMany([{json.dumps(spec)}], null);"
+                     "return built.pinItems;", BUILD_STUBS)
+        absolute = result[0]["absolute"]
+        self.assertEqual(len(absolute), 1)
+        self.assertEqual((absolute[0][1], absolute[0][2]), (0, 34))
+        self.assertEqual([entry[1:3] for entry in result[0]["flow"]], [[0, 500]])

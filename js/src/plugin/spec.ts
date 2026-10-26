@@ -54,6 +54,7 @@ export interface LayoutSpec {
   sizing?: ["fix" | "auto" | "fill", "fix" | "auto" | "fill"];   // board [horizontal, vertical]; auto = hug content
   columns?: (string | number)[];                   // grid tracks: "1fr", "200px", "50%", "auto"
   rows?: (string | number)[];
+  pin?: boolean;                                   // flex: children's x/y are authoritative, settled after the build
 }
 
 /** Layout properties of a child inside an auto-layout board. */

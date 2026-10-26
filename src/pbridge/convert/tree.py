@@ -4,6 +4,8 @@
 * children follow in DOM order, positioned elements sorted by z-index,
 * meaningful containers (boxes, links, buttons, list items, sections...) become groups, so the
   Penpot layer tree reads like the page.
+* with `layout: auto`, nodes carry private tags for convert/layout.py (container box and CSS,
+  own paint, out of flow); the layout pass turns groups into flex boards and removes the tags.
 """
 from __future__ import annotations
 
@@ -71,16 +73,31 @@ class TreeAssembler:
         own = self.own_nodes(element)
         children = sorted(self.ctx.children.get(index, []),
                           key=lambda child_index: (self.zkey(child_index), self.ctx.by_i[child_index]["i"]))
+        auto_layout = self.ctx.opts.get("layout") == "auto"
         descendants: list[Node] = []
         for child_index in children:
             if child_index in self.ctx.merged:
                 continue
-            descendants += self.assemble(child_index, depth + 1)
+            child_nodes = self.assemble(child_index, depth + 1)
+            if auto_layout and self.ctx.by_i[child_index].get("pos") in ("absolute", "fixed"):
+                for node in child_nodes:
+                    node["_oof"] = True            # out of flow: an absolute child of any layout
+            descendants += child_nodes
         all_nodes = own + descendants
         if self.ctx.opts["group"] and len(all_nodes) >= 2 and len(descendants) >= 1 and element["tag"] not in ("svg",):
             meaningful = element.get("box") or element["tag"] in GROUPING_TAGS or len(descendants) >= 3
+            if auto_layout and element.get("lay") and len(descendants) >= 2:
+                meaningful = True                  # keep flex containers: they are what auto layout encodes
             if meaningful:
-                return [{"t": "group", "name": self.group_name(element, all_nodes), "children": all_nodes}]
+                group: Node = {"t": "group", "name": self.group_name(element, all_nodes), "children": all_nodes}
+                if auto_layout:
+                    group["_rect"] = list(element["r"])
+                    if element.get("lay"):
+                        group["_lay"] = element["lay"]
+                    for node in own:
+                        if node.get("t") != "text":
+                            node["_own"] = True    # background, border, shadow: painted below the flow
+                return [group]
         return all_nodes
 
     @staticmethod

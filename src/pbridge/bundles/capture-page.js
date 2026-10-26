@@ -348,6 +348,27 @@
       };
     }
   };
+  var layoutFields = (record, style) => {
+    const display = style.display;
+    if (display.includes("flex") || display.includes("grid")) {
+      const pixels = (value) => parseFloat(value) || 0;
+      const layout = {
+        d: display.includes("flex") ? "flex" : "grid",
+        dir: style.flexDirection,
+        wrap: style.flexWrap,
+        jc: style.justifyContent,
+        ai: style.alignItems,
+        gap: [pixels(style.rowGap), pixels(style.columnGap)],
+        inset: [
+          pixels(style.paddingTop) + pixels(style.borderTopWidth),
+          pixels(style.paddingRight) + pixels(style.borderRightWidth),
+          pixels(style.paddingBottom) + pixels(style.borderBottomWidth),
+          pixels(style.paddingLeft) + pixels(style.borderLeftWidth)
+        ]
+      };
+      record.lay = layout;
+    }
+  };
   var pseudoFields = (record, element) => {
     for (const pseudoElement of ["::before", "::after"]) {
       const style = getComputedStyle(element, pseudoElement);
@@ -469,6 +490,7 @@
       if (ownText) textFields(record, html, style, effective.clip);
       boxFields(record, style);
       pseudoFields(record, element);
+      layoutFields(record, style);
       if (record.text || record.box || record.input || record.pseudo || CONTAINERS.has(tag) || element.children.length > 1) emit(record, element);
     }
     return records;

@@ -11,7 +11,8 @@ Wires the single-purpose parts together:
 
 Options (opts): fallback_font, system_font, serif_font, mono_font, font_map {web: penpot},
 available_fonts (set; families outside it use fallback_font), screenshot (path),
-group (default True), svg_vector (default True), metric_fit (default True), snap (default True).
+group (default True), svg_vector (default True), metric_fit (default True), snap (default True),
+layout ("absolute" (default): every shape at x/y; "auto": verified Penpot flex layouts, convert/layout.py).
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from typing import Any
 
 from pbridge.convert.context import ConversionContext, Node
 from pbridge.convert.fonts import FontResolver, css_weight
+from pbridge.convert.layout import LayoutEncoder
 from pbridge.convert.nodes.boxes import BoxBuilder
 from pbridge.convert.nodes.decorations import DecorationBuilder
 from pbridge.convert.nodes.images import ImageBuilder
@@ -83,6 +85,8 @@ class Converter:
         boards = self.sectioner.sections()
         if self.ctx.opts.get("snap", True):
             self.snap(boards)
+        if self.ctx.opts.get("layout") == "auto":   # on final positions: a layout must reproduce them exactly
+            LayoutEncoder(self.ctx).apply(boards)
         if top is not None or bottom is not None:
             low, high = top or -1e9, bottom or 1e9
             boards = [board for board in boards if board["y"] < high and board["y"] + board["h"] > low]

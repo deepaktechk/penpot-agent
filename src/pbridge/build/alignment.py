@@ -3,7 +3,8 @@
 audit:   for every built element box (boxes.json), search the (dx, dy) that best aligns the
          render with the reference (imaging.audit). Elements whose best offset is non-zero
          and clearly better are reported; big mismatches that no shift fixes get a note.
-autofix: move the reported elements by -offset (only small shifts, never annotated ones).
+autofix: move the reported elements by -offset (only small shifts, never annotated ones). Children
+         placed by a Penpot flex layout (`--layout auto`) are left alone: the layout positions them.
 """
 from __future__ import annotations
 
@@ -11,7 +12,9 @@ from typing import Any
 
 from pbridge.connection import Bridge
 
-_POSITIONS_JS = "return DATA.map(id => { const shape = pb.byId(id); return shape ? [shape.x, shape.y] : null; });"
+# [x, y], "flow" for a child positioned by its parent's flex layout, null when gone
+_POSITIONS_JS = ("return DATA.map(id => { const shape = pb.byId(id); if (!shape) return null; "
+                 "const child = shape.layoutChild; if (child && !child.absolute) return 'flow'; return [shape.x, shape.y]; });")
 
 
 class Aligner:
@@ -47,6 +50,9 @@ class Aligner:
             positions = self.bridge.exec(_POSITIONS_JS, data=[issue["id"] for issue in chunk], idempotent=True)
             ops = [{"sel": {"id": issue["id"]},
                     "set": {"x": round(position[0] - issue["dx"], 3), "y": round(position[1] - issue["dy"], 3)}}
-                   for issue, position in zip(chunk, positions) if position]
-            report += self.bridge.exec("return pb.patch(DATA);", data=ops, idempotent=True, timeout=300)
+                   for issue, position in zip(chunk, positions) if isinstance(position, list)]
+            report += [{"id": issue["id"], "skipped": "in a flex layout"}
+                       for issue, position in zip(chunk, positions) if position == "flow"]
+            if ops:
+                report += self.bridge.exec("return pb.patch(DATA);", data=ops, idempotent=True, timeout=300)
         return report

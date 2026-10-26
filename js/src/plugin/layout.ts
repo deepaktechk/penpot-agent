@@ -7,7 +7,8 @@
 //
 // Names follow CSS where possible and are mapped to Penpot's FlexLayout / GridLayout properties.
 import type { ChildLayoutSpec, LayoutSpec } from "./spec";
-import { isArray, toNumber } from "./state";
+import { byId, isArray, toNumber } from "./state";
+import type { PinItem } from "./state";
 
 /** CSS-style shorthand: 8 | [vertical, horizontal] | [top, right, bottom, left] -> [top, right, bottom, left] */
 export const sides = (value: number | number[] | undefined): [number, number, number, number] => {
@@ -67,4 +68,44 @@ export const applyChildLayout = (shape: any, spec: ChildLayoutSpec): void => {
   if (spec.maxW !== undefined) child.maxWidth = spec.maxW;
   if (spec.minH !== undefined) child.minHeight = spec.minH;
   if (spec.maxH !== undefined) child.maxHeight = spec.maxH;
+};
+
+/** Real size and position of the flow children of settled flex boards: [[w, h, x, y], ...] per item. */
+export const layoutState = (items: PinItem[]): ([number, number, number, number] | null)[][] =>
+  items.map(item => item.flow.map(([id]) => {
+    const shape = byId(id);
+    return shape ? [shape.width, shape.height, shape.x, shape.y] : null;
+  }));
+
+/** Corrected flex props from Python: [{board, layout: {justify?, gap?}, children: [[id, margin, alignSelf]]}].
+ *  Only sets properties: Penpot applies them asynchronously, so nothing is read back here. */
+export const setFlexProps = (corrections: { board: string; layout: any; children: [string, number[], string][] }[]): number => {
+  let changed = 0;
+  for (const correction of corrections) {
+    const board = byId(correction.board);
+    const layout = board && board.flex;
+    if (!layout) continue;
+    if (correction.layout.justify) layout.justifyContent = correction.layout.justify;
+    if (correction.layout.gap !== undefined) {
+      if (String(layout.dir).startsWith("column")) layout.rowGap = correction.layout.gap; else layout.columnGap = correction.layout.gap;
+    }
+    for (const [id, margin, alignSelf] of correction.children) {
+      const shape = byId(id);
+      if (!shape || !shape.layoutChild) continue;
+      applyChildLayout(shape, { margin, alignSelf: alignSelf as ChildLayoutSpec["alignSelf"] });
+      changed++;
+    }
+  }
+  return changed;
+};
+
+/** Absolute children of flex boards back at their spec x/y, once every flow is final. */
+export const placeAbsolute = (entries: [string, number, number][]): number => {
+  let placed = 0;
+  for (const [id, x, y] of entries) {
+    const shape = byId(id);
+    if (!shape) continue;
+    shape.x = x; shape.y = y; placed++;
+  }
+  return placed;
 };

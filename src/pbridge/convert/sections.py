@@ -73,8 +73,9 @@ class SectionSplitter:
             nodes = self.tree.assemble(index)
             if not nodes:
                 continue
-            if nodes and nodes[0].get("t") == "group" and len(nodes) == 1:
-                nodes = nodes[0]["children"]      # the board itself is the group
+            # the board itself is the group (with `layout: auto` the layout pass unwraps it, unless it became a flex board)
+            if nodes and nodes[0].get("t") == "group" and len(nodes) == 1 and self.ctx.opts.get("layout") != "auto":
+                nodes = nodes[0]["children"]
             boards.append({"t": "board", "key": f"sec{number:02d}", "name": self.section_title(index), "x": 0, "y": round(y, 2),
                            "w": self.ctx.width, "h": round(max(height, 1), 2), "fill": None, "clip": False, "children": nodes})
         return boards

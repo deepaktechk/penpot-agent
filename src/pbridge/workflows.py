@@ -15,13 +15,48 @@ from pbridge.connection import Bridge
 from pbridge.project import ProjectState
 
 
+# ---------------------------------------------------------------------- layout choice
+LAYOUT_MODES = ("absolute", "auto")
+LAYOUT_QUESTION = (
+    "How should pb position the layers of this project? It is your choice, saved for the project:\n"
+    "  --layout absolute   every layer at a fixed x/y (pixel-exact; nothing moves when you edit)\n"
+    "  --layout auto       Penpot flex layouts wherever they reproduce the page exactly (edit a text and\n"
+    "                      its neighbours move), fixed x/y everywhere else\n"
+    "Run the command again with one of them.")
+
+
+def resolve_layout(state: ProjectState, choice: str | None) -> str:
+    """The project's layout mode: `choice` (saved), else the saved one. Never picked for the user: a
+    project without one asks in a terminal and stops with the question otherwise. Projects built before
+    the option existed were built absolutely and keep that."""
+    if choice:
+        if state.config.get("layout") != choice:
+            state.config["layout"] = choice
+            state.save_config()
+        return choice
+    saved = state.config.get("layout")
+    if saved in LAYOUT_MODES:
+        return saved
+    if state.load_json("idmap.json", {}):
+        print("[layout] this project was built with absolute positions; keeping them (--layout auto to change)", file=sys.stderr)
+        return resolve_layout(state, "absolute")
+    if sys.stdin.isatty() and sys.stderr.isatty():
+        print(LAYOUT_QUESTION.rsplit("\n", 1)[0], file=sys.stderr)
+        answer = ""
+        while answer not in LAYOUT_MODES:
+            answer = input("layout (absolute/auto): ").strip().lower()
+        return resolve_layout(state, answer)
+    raise SystemExit(LAYOUT_QUESTION)
+
+
 # ---------------------------------------------------------------------- convert
 def convert_capture(state: ProjectState, capture: str | None = None, fallback_font: str = "Inter",
                     system_font: str = "Inter", flat: bool = False, font_map: str | None = None,
                     region: tuple | None = None, out_path: str | None = None, check_fonts: bool = True,
-                    use_cache: bool = True) -> dict[str, Any]:
+                    use_cache: bool = True, layout_mode: str = "absolute") -> dict[str, Any]:
     """Capture dir (or layout.json) -> spec file. Returns a summary of the spec.
 
+    layout_mode: "absolute" or "auto" (verified Penpot flex layouts, convert/layout.py); see resolve_layout.
     check_fonts: ask Penpot which font families exist; missing ones use `fallback_font`.
     font_map: "Web Font=Penpot Font,..." overrides.
     region: (x0, y0, x1, y1) - only sections overlapping y0..y1 are kept.
@@ -32,7 +67,7 @@ def convert_capture(state: ProjectState, capture: str | None = None, fallback_fo
     capture_path = Path(capture) if capture else Path(state.config.get("capture", ""))
     layout_file = capture_path / "layout.json" if capture_path.is_dir() else capture_path
     layout = json.loads(layout_file.read_text())
-    opts: dict[str, Any] = {"fallback_font": fallback_font, "group": not flat, "system_font": system_font}
+    opts: dict[str, Any] = {"fallback_font": fallback_font, "group": not flat, "system_font": system_font, "layout": layout_mode}
     screenshot = layout_file.parent / "shot.png"
     if screenshot.exists():
         opts["screenshot"] = str(screenshot)
@@ -101,7 +136,7 @@ def build_spec(bridge: Bridge, spec_path: str, parent: str | None = None, page_b
 
 
 def build_responsive(state: ProjectState, bridge: Bridge, captures: list[dict[str, Any]], board: str, font: str = "Inter",
-                     system_font: str = "Inter", font_map: str | None = None) -> list[dict[str, Any]]:
+                     system_font: str = "Inter", font_map: str | None = None, layout_mode: str = "absolute") -> list[dict[str, Any]]:
     """One page board per captured width ("<board> – 390px"), placed left to right, each compared
     with its own capture. The first width's board stays the project's page board."""
     from pbridge.connection import Exporter
@@ -111,7 +146,8 @@ def build_responsive(state: ProjectState, bridge: Bridge, captures: list[dict[st
     for capture in captures:
         capture_dir = Path(capture["out"])
         width = capture.get("width") or json.loads((capture_dir / "layout.json").read_text())["width"]
-        spec = convert_capture(state, str(capture_dir), fallback_font=font, system_font=system_font, font_map=font_map)
+        spec = convert_capture(state, str(capture_dir), fallback_font=font, system_font=system_font, font_map=font_map,
+                               layout_mode=layout_mode)
         board_name = f"{board} – {width}px"
         build_spec(bridge, spec["spec"], page_board=board_name, font=font, after=previous_board or "*")
         board_id = bridge.state.config["page_board"]
@@ -168,6 +204,7 @@ def audit_render(bridge: Bridge, reference: str, render: str, keys: list[str] | 
         return {"render": render, "issues": issues}
     fixed = aligner.autofix(issues, max_shift=max_shift)
     return {"render": render, "issues": len(issues), "moved": sum(1 for result in fixed if result.get("ok")),
+            "in_layout": sum(1 for result in fixed if result.get("skipped")),
             "unfixable": [issue for issue in issues if issue.get("note")][:15]}
 
 

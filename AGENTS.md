@@ -53,7 +53,7 @@ npm --prefix js ci                                 # TypeScript toolchain (only 
 
 ```
 uv run ruff check src tests
-uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging tests.test_build_plan tests.test_svg_source tests.test_image_analysis tests.test_run_cache tests.test_builder tests.test_plugin_runtime tests.test_mcp_client   # fast, offline
+uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging tests.test_build_plan tests.test_svg_source tests.test_image_analysis tests.test_run_cache tests.test_builder tests.test_plugin_runtime tests.test_mcp_client tests.test_layout tests.test_capture_gate   # fast, offline
 ./pb selftest                     # + fixture capture (needs Chrome + network)
 npm --prefix js run check         # typecheck + name check + build (when js/src changed)
 ```
@@ -97,6 +97,18 @@ npm --prefix js run check         # typecheck + name check + build (when js/src 
   `content-visibility: hidden` and a zero-area `clip-path` (`circle(0)`, `inset(50%)`) hide every
   descendant (`js/src/capture/page/effective.ts`).
 - Complex SVGs (clipPath/mask/pattern/filter/use/image/text) are rasterized; simple ones become vectors.
+- Flex layouts (measured, `tests/fixtures/penpot_layout_conformance.json`): Penpot matches Chrome for
+  start/center/end/space-between, align, margins (negative too), overflow and grid tracks, but
+  space-around/evenly ignore the gap, reverse directions put "start" at the physical start, and an
+  overflowing `align-self` center/end child goes to the start. A flex board flows **and paints** its
+  children by descending `parentIndex` (`parentIndex` alone does not tell paint order: export to check).
+- Penpot recalculates a layout **asynchronously** after a property change (margin, alignSelf): positions
+  read in the same call are stale. Build children at x/y, switch the layout on, then measure/correct/place
+  in later calls (`SpecBuilder._settle_layouts`). Creating shapes inside a live layout flows them into
+  provisional slots that later siblings move; the builder makes groups by building children into the
+  parent first, so a group directly in a flex board is emitted as a plain board.
+- Hugging (auto-width) texts come out up to a few px wider in Penpot than in Chrome (rounded up):
+  flow siblings after them are put back by margins after the build.
 - In the capture (Chrome), SVG `getScreenCTM()` returns an `SVGMatrix` (`a`..`f` only, no `m11`..`m22`).
 - The plugin runtime bundle must not start with "use strict" (it is spliced into a function body);
   `js/build.mjs` checks this.

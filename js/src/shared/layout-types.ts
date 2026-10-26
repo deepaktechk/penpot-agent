@@ -43,6 +43,16 @@ export interface PseudoBox {
   bg: string; bi?: string; radius: string; bw: string; bc: string; op: string; color: string; font: string; tf: string;
 }
 
+/** Layout of a flex / grid container (computed CSS), read by the converter's `--layout auto` pass.
+ *  d display kind, dir flex-direction, wrap flex-wrap, jc justify-content, ai align-items,
+ *  gap [row-gap, column-gap] in px, inset [top, right, bottom, left] = padding + border in px. */
+export interface ContainerLayout {
+  d: "flex" | "grid";
+  dir: string; wrap: string; jc: string; ai: string;
+  gap: [number, number];
+  inset: [number, number, number, number];
+}
+
 /** One emitted DOM element. Optional fields are only present when relevant. */
 export interface CapturedElement {
   i: number;            // index in document order
@@ -73,6 +83,8 @@ export interface CapturedElement {
   visible?: string; ovh?: 1; tclip?: Rect; tov?: string; ws?: string; lc?: number; lcBox?: Rect; pad?: number[];
   // decoration
   box?: BoxStyle;
+  // layout of a flex/grid container
+  lay?: ContainerLayout;
   pseudo?: PseudoBox[];
 }
 

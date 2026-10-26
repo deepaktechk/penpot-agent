@@ -13,6 +13,18 @@ export interface FitItem { id: string; w: number; anchor: number; align: string;
  *  the style the text outside the ranges must keep (colour, weight, size). */
 export interface RangeItem { id: string; ranges: [number, number, any][]; font: string; base?: { color?: any; weight?: number | string; size?: number } }
 
+/** A flex board built by pb (`--layout auto`), settled after the text post-passes by Python
+ *  (build/builder.py `_settle_layouts`): flow children [id, x, y, w, h, child props] with their spec box,
+ *  absolute children [id, x, y]. Penpot recalculates a layout asynchronously after a property change,
+ *  so measuring, correcting and placing happen in separate calls. */
+export interface PinItem {
+  board: string;
+  box: [number, number, number, number];
+  layout: any;
+  flow: [string, number, number, number, number, any][];
+  absolute: [string, number, number][];
+}
+
 export interface RuntimeState {
   version: string;
   imgs: Record<string, any>;                                    // asset key -> Penpot ImageData
@@ -21,8 +33,10 @@ export interface RuntimeState {
   warnings: string[];
   defaultFont?: string;
   _made?: Shape[];          // shapes created by the current build (rolled back on error)
+  _absolute?: [Shape, any][];   // absolute layout children of the current build, placed when it is complete
   _fit: FitItem[];          // texts waiting for width fitting (pb.fitTexts)
   _ranges: RangeItem[];     // texts whose range styles must be verified (pb.verifyRanges)
+  _pins: PinItem[];         // flex boards whose flow children pb.pinLayouts checks
   [member: string]: any;    // the API functions are attached in index.ts
 }
 
@@ -36,6 +50,7 @@ export const runtime: RuntimeState = {
   warnings: [],
   _fit: [],
   _ranges: [],
+  _pins: [],
 };
 
 export const isArray = Array.isArray;

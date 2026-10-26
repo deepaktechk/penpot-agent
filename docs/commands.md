@@ -25,12 +25,25 @@ plugin call, `--version`.
 | Command | Purpose |
 |---|---|
 | `pb capture URL [--name N] [--fonts "A,B"] [--width 1920] [--widths 1440,768,390] [--hide sel] [--click sel] [--wait ms] [--selector sel] [--color-scheme dark\|light] [--cookies file.json] [--user-data-dir DIR] [--force]` | screenshot + layout dump behind the capture gate; becomes the project reference |
-| `pb convert [capture] [--fallback-font F] [--system-font F] [--font-map "Web=Penpot"] [--region y0,y1] [--flat] [--no-font-check]` | layout → spec JSON in `.pbridge/specs/` |
-| `pb rebuild [--board NAME] [--after BOARD\|'*'] --font F [--only keys] [--all] [--no-staging] [--fix] [--hotspots N] [--montage N]` | convert → build → [autofix] → compare → render gate; sections unchanged since the last build are kept; when nothing changed at all (spec, reference, options, Penpot file revision) the last result is reused in ~2 s; `--all` re-converts and rebuilds everything; big sections on a full page are built on temporary pages (`--no-staging`: in place); prints the time of each stage |
-| `pb clone URL --board NAME [--fonts F] [--fallback-font F]` | capture → convert → build → compare in one go |
+| `pb convert [capture] [--fallback-font F] [--system-font F] [--font-map "Web=Penpot"] [--region y0,y1] [--flat] [--no-font-check] [--layout absolute\|auto]` | layout → spec JSON in `.pbridge/specs/` |
+| `pb rebuild [--board NAME] [--after BOARD\|'*'] --font F [--layout absolute\|auto] [--only keys] [--all] [--no-staging] [--fix] [--hotspots N] [--montage N]` | convert → build → [autofix] → compare → render gate; sections unchanged since the last build are kept; when nothing changed at all (spec, reference, options, Penpot file revision) the last result is reused in ~2 s; `--all` re-converts and rebuilds everything; big sections on a full page are built on temporary pages (`--no-staging`: in place); prints the time of each stage |
+| `pb clone URL --board NAME [--fonts F] [--fallback-font F] [--layout absolute\|auto]` | capture → convert → build → compare in one go |
 | `pb library [--colors 12] [--types 12] [--prefix Site] [--dry]` | most used colours and text styles → Penpot library |
 | `pb tokens [--capture C] [--set Site] [--colors 12] [--dry]` | capture colours and type → a Penpot design-token set |
-| `pb responsive URL --board NAME [--widths 1440,768,390] [--font F]` | capture several widths; one board per width (`NAME – <width>px`), side by side |
+| `pb responsive URL --board NAME [--widths 1440,768,390] [--font F] [--layout absolute\|auto]` | capture several widths; one board per width (`NAME – <width>px`), side by side |
+
+**Layer positioning (`--layout`) is the user's choice**, saved per project in `.pbridge/config.json`:
+
+- `absolute` — every layer at a fixed x/y (the behaviour of earlier versions).
+- `auto` — Penpot flex layouts for every container whose children a layout reproduces exactly
+  (`src/pbridge/convert/layout.py`: the CSS flex when Penpot renders it identically, else a
+  start-justified row/column with exact margins), fixed x/y everywhere else: grid and wrapping
+  containers, overlapping children, positioned elements and the container's own background. After the
+  build, children of hugging texts that Penpot sized a pixel differently are put back by margins; the
+  report gives `layout_boards_settled` and `layout_worst_px`. Autofix leaves flow children alone.
+
+A new project without a saved choice asks in a terminal and stops with the question otherwise (agents
+must ask the user). Projects built before the option existed keep `absolute`.
 
 Capture options shared by `capture`, `clone`, `responsive` and `verify`: `--color-scheme` emulates
 `prefers-color-scheme` (default light, whatever the OS says); `--cookies` loads a JSON cookie file

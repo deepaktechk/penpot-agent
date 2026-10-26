@@ -15,6 +15,12 @@
 * Text post-passes (range verification, width fitting) run once per build, over every text
   built, from Python with short pauses between calls - never inside the plugin, where
   background-tab timers run about once a minute.
+* Flex layouts (`--layout auto`): a board's layout is switched on once its children exist at their
+  final x/y (`pb.finishFlex` for boards built incrementally). Penpot recalculates a layout
+  asynchronously after a property change, so after the text post-passes the boards are settled in
+  separate calls (`_settle_layouts`): read the real sizes, correct the margins where hugging texts
+  came out a pixel wider than in the browser (`convert.layout.settle_correction`), then place the
+  absolute children, then check every flow child against its spec position.
 
 Spec coordinates are relative to the page board; they are shifted to absolute canvas
 coordinates before building. `.pbridge/boxes.json` keeps the page-relative target boxes
@@ -32,6 +38,7 @@ from pbridge.assets.store import AssetStore
 from pbridge.build.plan import node_cost, pack_batches, section_hash, shape_estimate, staging_saves_time
 from pbridge.build.spec_tree import Node, assign_keys, flatten, node_box, offset_nodes
 from pbridge.connection import Bridge
+from pbridge.convert.layout import settle_correction
 
 REMOVE_JS = "return pb.removeMany(DATA);"                  # DATA: shape ids
 BUILD_JS = "return pb.buildMany(DATA.n, DATA.p);"          # DATA.n: nodes, DATA.p: parent id
@@ -96,7 +103,7 @@ class SpecBuilder:
             self.bridge.exec(REMOVE_JS, data=to_remove, idempotent=True)
         if origin_x or origin_y:
             nodes = offset_nodes(copy.deepcopy(nodes), origin_x, origin_y)
-        self._fit_items, self._range_items = [], []
+        self._fit_items, self._range_items, self._pin_items = [], [], []
 
         def record(section: Node, result: dict, started: float, how: str = "") -> None:
             idmap.update(result["ids"])
@@ -142,6 +149,7 @@ class SpecBuilder:
             if not order.get("ok"):
                 report["warnings"].append("section layer order could not be restored")
         self._post_texts(report)
+        self._settle_layouts(report)
         self.state.save_json("idmap.json", idmap)
         self.state.save_json("boxes.json", boxes)
         self.state.save_json("section_hashes.json", hashes)
@@ -175,7 +183,7 @@ class SpecBuilder:
         try:
             for section in sections:
                 started = time.time()
-                fit_before, ranges_before = len(self._fit_items), len(self._range_items)
+                fit_before, ranges_before, pins_before = len(self._fit_items), len(self._range_items), len(self._pin_items)
                 try:
                     if self._fits_one_batch(section):    # page, build and component in one round trip
                         result = self.bridge.exec(STAGED_BUILD_JS, data={"n": [{**section, "tag": section.get("tag", section["key"])}],
@@ -184,13 +192,14 @@ class SpecBuilder:
                         staged = result.pop("staged")
                         self._fit_items += result.pop("fitItems", None) or []
                         self._range_items += result.pop("rangeItems", None) or []
+                        self._pin_items += result.pop("pinItems", None) or []
                     else:
                         self.bridge.exec("return await pb.stageBegin();")
                         result = self._build_node(section, None)        # top level of the temporary page
                         staged = self.bridge.exec("return pb.stageFinish(DATA);", data=result["ids"][section["key"]])
                     built.append((section, result, staged, started))
                 except Exception as error:
-                    del self._fit_items[fit_before:], self._range_items[ranges_before:]
+                    del self._fit_items[fit_before:], self._range_items[ranges_before:], self._pin_items[pins_before:]
                     fail(section, error)
             if not built:
                 return
@@ -217,6 +226,10 @@ class SpecBuilder:
             record(section, result, started, ", staged")
         for item in self._fit_items + self._range_items:   # text post-passes run on the final shapes
             item["id"] = final_ids.get(item["id"], item["id"])
+        for pin in self._pin_items:                         # and so does layout settling
+            pin["board"] = final_ids.get(pin["board"], pin["board"])
+            for entry in pin.get("flow", []) + pin.get("absolute", []):
+                entry[0] = final_ids.get(entry[0], entry[0])
 
     # ------------------------------------------------------------------ bookkeeping
     def _unchanged_sections(self, nodes: list[Node], section_hashes: dict, hashes: dict, idmap: dict) -> set[str]:
@@ -267,10 +280,37 @@ class SpecBuilder:
             time.sleep(0.3)
             self.bridge.exec("return pb.fitTexts(DATA, 2);", data=self._fit_items, timeout=300)
 
+    def _settle_layouts(self, report: dict) -> None:
+        """Once per build, after the text post-passes: flex boards whose children came out a pixel off get
+        corrected margins, then absolute children are placed, then every flow child is checked. Separate
+        calls with pauses: Penpot applies layout changes asynchronously."""
+        items = [item for item in self._pin_items if item.get("flow") or item.get("absolute")]
+        if not items:
+            return
+        time.sleep(0.4)
+        measured = self.bridge.exec("return pb.layoutState(DATA);", data=items, timeout=300)
+        corrections = [correction for item, state in zip(items, measured) if (correction := settle_correction(item, state))]
+        if corrections:
+            self.bridge.exec("return pb.setFlexProps(DATA);", data=corrections, idempotent=True, timeout=300)
+            time.sleep(0.5)
+        # outermost boards first (they were listed inner first): moving a board carries its subtree
+        absolute = [entry for item in reversed(items) for entry in item.get("absolute", [])]
+        if absolute:
+            self.bridge.exec("return pb.placeAbsolute(DATA);", data=absolute, idempotent=True, timeout=300)
+            time.sleep(0.4)
+        final = self.bridge.exec("return pb.layoutState(DATA);", data=items, timeout=300)
+        worst = max((max(abs(state[2] - entry[1]), abs(state[3] - entry[2]))
+                     for item, states in zip(items, final) for entry, state in zip(item["flow"], states) if state), default=0.0)
+        report["layout_boards_settled"] = len(corrections)
+        report["layout_worst_px"] = round(worst, 2)
+        if worst > 0.5:
+            report["warnings"].append(f"flex layout children up to {worst:.1f} px from their spec position")
+
     def _build_batch(self, nodes: list[Node], parent: str | None) -> dict:
         result = self.bridge.exec(BUILD_JS, data={"n": nodes, "p": parent}, timeout=600)
         self._fit_items += result.pop("fitItems", None) or []
         self._range_items += result.pop("rangeItems", None) or []
+        self._pin_items += result.pop("pinItems", None) or []
         return result
 
     def _fits_one_batch(self, node: Node) -> bool:
@@ -305,10 +345,20 @@ class SpecBuilder:
         return ids
 
     def _build_board_incremental(self, board: Node, parent: str | None) -> dict:
-        shell = {key: value for key, value in board.items() if key != "children"}
+        """Shell, then packed batches of children. A flex layout is switched on after the children exist
+        (built into a live layout they would land in provisional slots); grid layouts place by cell."""
+        flex = (board.get("layout") or {}).get("type") == "flex"
+        shell = {key: value for key, value in board.items() if key != "children" and not (flex and key == "layout")}
         shell["children"] = []; shell["tag"] = board.get("key")
         ids = dict(self._build_batch([shell], parent)["ids"])
         ids.update(self._build_children(board["children"], ids[board["key"]]))
+        if flex:
+            children = [{"id": ids[child["key"]], "child": child.get("child"), "x": child.get("x"), "y": child.get("y"),
+                         "w": child.get("w"), "h": child.get("h")} for child in board["children"] if child.get("key") in ids]
+            node = {key: value for key, value in board.items() if key != "children"}
+            result = self.bridge.exec("return pb.finishFlex(DATA);", data={"board": ids[board["key"]], "node": node,
+                                                                           "children": children})
+            self._pin_items += result.get("pinItems") or []
         return ids
 
     def _build_group_incremental(self, group: Node, parent: str | None) -> dict:

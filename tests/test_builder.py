@@ -34,7 +34,12 @@ class FakeBridge:
             ids: dict = {}
             for node in data["n"]:
                 self._ids(node, ids)
-            result = {"built": len(data["n"]), "ids": ids, "warnings": [], "fitItems": [], "rangeItems": []}
+            pins = [{"board": ids[node["key"]], "box": [node["x"], node["y"], node["w"], node["h"]], "layout": node["layout"],
+                     "flow": [[ids[child["key"]], child["x"], child["y"], child["w"], child["h"], child["child"]]
+                              for child in node["children"] if not child["child"].get("absolute")],
+                     "absolute": [[ids[child["key"]], child["x"], child["y"]] for child in node["children"] if child["child"].get("absolute")]}
+                    for top in data["n"] for node in self._flatten(top) if node.get("layout")]
+            result = {"built": len(data["n"]), "ids": ids, "warnings": [], "fitItems": [], "rangeItems": [], "pinItems": pins}
             if "pb.stageBegin" in body:
                 result["begin"] = {"page": "staging", "previous": "target"}
                 result["staged"] = {"component": "component-" + data["key"], "order": list(ids.values()), "x": 0, "y": 0}
@@ -48,7 +53,12 @@ class FakeBridge:
             return {"moves": 0, "ok": True}
         if "pb.existing" in body:
             return list(data)
+        if "pb.layoutState" in body:    # Penpot put every flow child exactly at its spec box
+            return [[[entry[3], entry[4], entry[1], entry[2]] for entry in item["flow"]] for item in data]
         return 0
+
+    def _flatten(self, node: dict) -> list:
+        return [node] + [descendant for child in node.get("children", []) for descendant in self._flatten(child)]
 
     def bodies(self, marker: str) -> list:
         return [data for code, data in self.calls if marker in code]
@@ -91,6 +101,20 @@ class BuilderCalls(unittest.TestCase):
         self.assertTrue(idmap["big"].startswith("final-"))       # the copy on the target page, not the staged shape
         self.assertFalse(idmap["small"].startswith("final-"))
         self.assertEqual(bridge.bodies("pb.stageCleanup"), ["target"])
+
+    def test_staged_flex_board_is_settled_on_the_final_shapes(self):
+        # bug: the staging id translation still used the old pin item format and crashed every staged
+        # `--layout auto` build ('children') before absolute children were placed
+        flex = {"t": "board", "x": 0, "y": 0, "w": 300, "h": 40, "layout": {"type": "flex", "dir": "row", "gap": 10},
+                "children": [{"t": "rect", "x": 0, "y": 0, "w": 300, "h": 40, "child": {"absolute": True}},
+                             {"t": "rect", "x": 0, "y": 0, "w": 100, "h": 40, "child": {"sizing": ["fix", "fix"]}}]}
+        big = section("big", 200)
+        big["children"].append(flex)
+        bridge = self.build({"nodes": [big]}, page_shapes=1400)
+        placed = bridge.bodies("pb.placeAbsolute")
+        self.assertEqual(len(placed), 1)
+        self.assertTrue(placed[0][0][0].startswith("final-"))
+        self.assertTrue(all(entry[0].startswith("final-") for item in bridge.bodies("pb.layoutState")[0] for entry in item["flow"]))
 
     def test_nothing_is_staged_on_an_almost_empty_page(self):
         bridge = self.build({"nodes": [section("a", 200)]}, page_shapes=10)

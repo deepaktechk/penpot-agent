@@ -47,6 +47,7 @@ class FixtureEndToEnd(unittest.TestCase):
         cls.shot = capture_dir / "shot.png"
         from pbridge.convert import Converter
         cls.spec = Converter(cls.layout, {"fallback_font": "Outfit", "screenshot": str(cls.shot)}).convert()
+        cls.auto_spec = Converter(cls.layout, {"fallback_font": "Outfit", "screenshot": str(cls.shot), "layout": "auto"}).convert()
         cls.nodes = all_nodes(cls.spec["nodes"])
         cls.texts = [node for node in cls.nodes if node.get("t") == "text"]
 
@@ -92,6 +93,24 @@ class FixtureEndToEnd(unittest.TestCase):
         self.assertNotIn("Inset closed popup", texts)
         self.assertFalse([node for node in self.nodes if node.get("name") == "closed zoom logo"])
         self.assertIn("Open zoom popup", texts)
+
+    def test_auto_layout_reproduces_every_position(self):
+        # --layout auto: every emitted flex layout puts each child exactly where the absolute build does
+        from pbridge.convert.layout import layout_errors
+        boards = [node for node in all_nodes(self.auto_spec["nodes"]) if node.get("layout")]
+        self.assertGreaterEqual(len(boards), 3)
+        self.assertEqual(layout_errors(self.auto_spec["nodes"]), [])
+        self.assertFalse([node for node in self.nodes if node.get("layout") or node.get("child")])   # absolute mode untouched
+
+    def test_flex_nav_is_a_flex_board(self):
+        boards = [node for node in all_nodes(self.auto_spec["nodes"]) if node.get("layout")
+                  and any(child.get("t") == "text" and child["text"]["text"] == "Pricing" for child in node["children"])]
+        self.assertEqual(len(boards), 1)
+        self.assertEqual({key: boards[0]["layout"][key] for key in ("dir", "justify", "align", "gap")},
+                         {"dir": "row", "justify": "center", "align": "center", "gap": 24})
+        badge = [child for child in boards[0]["children"] if child.get("child", {}).get("absolute")
+                 and "new" in json.dumps(child)]
+        self.assertTrue(badge)
 
     def test_visible_child_of_a_hidden_parent_is_built(self):
         texts = {node["text"]["text"] for node in self.texts}
@@ -215,6 +234,35 @@ class FixtureEndToEnd(unittest.TestCase):
             # Penpot quirk: range ending at the end of a later paragraph must stay red
             color = bridge.exec(LAST_RANGE_COLOR_JS, data=board)
             self.assertEqual(color.upper(), "#EF3225")
+            render = Exporter(bridge).export(board)
+            gate = render_gate(self.shot, render, spec, state=None, overrides={"section_pct_error": 6.0})
+            self.assertTrue(gate["ok"], gate["errors"])
+        finally:
+            bridge.exec("const shape = pb.byId(DATA); if (shape) shape.remove(); return 1;", data=board)
+
+    @unittest.skipUnless(BUILD, "build disabled (use pb selftest --build)")
+    def test_build_auto_layout_in_penpot(self):
+        # --layout auto in Penpot: absolute children placed after the layouts settle (they stayed at their
+        # first flow slot), child boards built before their parent's layout is live (they moved 98 px with
+        # their subtree on pumble.com), flow children put back after Penpot's wider hugging texts
+        from pbridge.build import PageBoards, SpecBuilder
+        from pbridge.connection import Bridge, Exporter
+        from pbridge.convert import Converter
+        from pbridge.project import ProjectState
+        from pbridge.quality import render_gate
+        project = self.tmp / "proj-auto"; state = ProjectState.open(project); state.init()
+        bridge = Bridge(state)
+        available = set(bridge.exec("return penpot.fonts.all.map(font => font.name);"))
+        spec = Converter(self.layout, {"fallback_font": "Outfit", "screenshot": str(self.shot), "available_fonts": available,
+                                       "layout": "auto"}).convert()
+        board = PageBoards(bridge).ensure("pbridge selftest auto layout (auto-removed)", spec["width"], spec["height"], after="*")
+        try:
+            report = SpecBuilder(bridge).build(spec, parent=board, default_font="Outfit", progress=lambda *message: None)
+            self.assertFalse(report["failed"], report["failed"])
+            flex_boards = bridge.exec("return penpotUtils.findShapes(shape => shape.type === 'board' && !!shape.flex, pb.byId(DATA)).length;",
+                                      data=board)
+            self.assertGreaterEqual(flex_boards, 3)
+            self.assertLessEqual(report.get("layout_worst_px", 0), 0.5, report.get("warnings"))
             render = Exporter(bridge).export(board)
             gate = render_gate(self.shot, render, spec, state=None, overrides={"section_pct_error": 6.0})
             self.assertTrue(gate["ok"], gate["errors"])

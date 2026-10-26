@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `--layout absolute|auto` on `convert`, `rebuild`, `clone` and `responsive`: the user chooses how layers
+  are positioned, saved per project. `auto` builds Penpot flex layouts for every container whose children
+  a layout reproduces exactly (pumble.com: 115 flex boards, page diff 1.35 % vs 1.31 % absolute) and keeps
+  fixed x/y elsewhere (`convert/layout.py`: a simulator of Penpot's flex rules, measured against Penpot in
+  `tests/fixtures/penpot_layout_conformance.json`). A new project without a choice is asked (terminal) or
+  stopped with the question; projects built earlier keep `absolute`. The skills ask the user first.
+- The capture records the layout of flex/grid containers (`lay`).
+
+### Fixed
+- Absolute children (`child.absolute`) of a layout board stayed at the flow slot Penpot first gave them;
+  they are now placed at their `x`/`y` once every layout is final.
+- Layout boards in specs were filled while their layout was live, so a child board landed in a
+  provisional slot that later siblings and its own margins moved, carrying its children off (pumble.com:
+  98 px). Flex boards now get their layout after their children exist at their final positions.
+
 ## [0.1.1] - 2026-10-26
 
 ### Changed

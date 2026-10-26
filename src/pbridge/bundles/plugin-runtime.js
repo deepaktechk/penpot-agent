@@ -9,7 +9,8 @@
     ids: previous && previous.ids || {},
     warnings: [],
     _fit: [],
-    _ranges: []
+    _ranges: [],
+    _pins: []
   };
   var isArray = Array.isArray;
   var toNumber = (value, fallback = 0) => value === void 0 || value === null || isNaN(+value) ? fallback : +value;
@@ -239,6 +240,41 @@
     if (spec.maxW !== void 0) child.maxWidth = spec.maxW;
     if (spec.minH !== void 0) child.minHeight = spec.minH;
     if (spec.maxH !== void 0) child.maxHeight = spec.maxH;
+  };
+  var layoutState = (items) => items.map((item) => item.flow.map(([id]) => {
+    const shape = byId(id);
+    return shape ? [shape.width, shape.height, shape.x, shape.y] : null;
+  }));
+  var setFlexProps = (corrections) => {
+    let changed = 0;
+    for (const correction of corrections) {
+      const board = byId(correction.board);
+      const layout = board && board.flex;
+      if (!layout) continue;
+      if (correction.layout.justify) layout.justifyContent = correction.layout.justify;
+      if (correction.layout.gap !== void 0) {
+        if (String(layout.dir).startsWith("column")) layout.rowGap = correction.layout.gap;
+        else layout.columnGap = correction.layout.gap;
+      }
+      for (const [id, margin, alignSelf] of correction.children) {
+        const shape = byId(id);
+        if (!shape || !shape.layoutChild) continue;
+        applyChildLayout(shape, { margin, alignSelf });
+        changed++;
+      }
+    }
+    return changed;
+  };
+  var placeAbsolute = (entries) => {
+    let placed = 0;
+    for (const [id, x, y] of entries) {
+      const shape = byId(id);
+      if (!shape) continue;
+      shape.x = x;
+      shape.y = y;
+      placed++;
+    }
+    return placed;
   };
 
   // src/plugin/fonts.ts
@@ -484,8 +520,31 @@
     }
     return shape;
   };
+  var switchOnFlex = (board, node, children, pins) => {
+    const placed = new Map(children.map(([built]) => [built, [toNumber(built.x), toNumber(built.y)]]));
+    applyLayout(board, node.layout);
+    size(board, node);
+    children.forEach(([built], i) => built.setParentIndex(children.length - 1 - i));
+    const item = {
+      board: board.id,
+      box: [toNumber(node.x), toNumber(node.y), toNumber(node.w), toNumber(node.h)],
+      layout: node.layout,
+      flow: [],
+      absolute: []
+    };
+    for (const [built, child] of children) {
+      if (!child.child) continue;
+      applyChildLayout(built, child.child);
+      if (child.x === void 0 || child.y === void 0) continue;
+      const [x, y] = placed.get(built);
+      if (child.child.absolute) item.absolute.push([built.id, x, y]);
+      else if (node.layout.pin) item.flow.push([built.id, x, y, toNumber(child.w), toNumber(child.h), child.child]);
+    }
+    pins.push(item);
+  };
   var build = (root, parent, timings) => {
     const made = runtime._made = [];
+    const absolute = runtime._absolute = [];
     const buildNode = (node, container) => {
       let shape = null;
       const type = node.t;
@@ -498,12 +557,22 @@
         shape.fills = paint(node.fill === void 0 ? null : node.fill);
         shape.clipContent = !!node.clip;
         applyCommon(shape, { ...node, fill: void 0 });
-        const layout = node.layout ? applyLayout(shape, node.layout) : null;
-        for (const child of node.children || []) {
-          const built = buildNode(child, shape);
-          if (built && layout && node.layout.type === "grid" && child.child && child.child.cell) {
-            layout.appendChild(built, child.child.cell[0], child.child.cell[1]);
+        if (node.layout && node.layout.type === "grid") {
+          const layout = applyLayout(shape, node.layout);
+          for (const child of node.children || []) {
+            const built2 = buildNode(child, shape);
+            if (!built2 || !child.child) continue;
+            applyChildLayout(built2, child.child);
+            if (child.child.absolute) absolute.push([built2, child]);
+            else if (child.child.cell) layout.appendChild(built2, child.child.cell[0], child.child.cell[1]);
           }
+        } else {
+          const builtChildren = [];
+          for (const child of node.children || []) {
+            const built2 = buildNode(child, shape);
+            if (built2) builtChildren.push([built2, child]);
+          }
+          if (node.layout) switchOnFlex(shape, node, builtChildren, runtime._pins);
         }
         if (node.flex) {
           const rawLayout = shape.addFlexLayout();
@@ -578,7 +647,10 @@
       } else {
         throw new Error("unknown node type: " + type);
       }
-      if (shape && node.child) applyChildLayout(shape, node.child);
+      if (shape && node.child && shape.layoutChild) {
+        applyChildLayout(shape, node.child);
+        if (node.child.absolute) absolute.push([shape, node]);
+      }
       if (shape && node.key) runtime.ids[node.key] = shape.id;
       if (shape && node.component) {
         const component = penpot.library.local.createComponent([shape]);
@@ -588,7 +660,9 @@
       if (timings && !node.children) timings[type] = (timings[type] || 0) + Date.now() - started;
       return shape;
     };
-    return buildNode(root, parent);
+    const built = buildNode(root, parent);
+    for (const [shape, node] of absolute.slice().reverse()) place(shape, node);
+    return built;
   };
   var buildMany = (nodes, parentId) => {
     const parent = parentId ? byId(parentId) : penpot.root;
@@ -596,6 +670,7 @@
     runtime.warnings = [];
     runtime._fit = [];
     runtime._ranges = [];
+    runtime._pins = [];
     const started = Date.now();
     const msByType = {};
     let count = 0;
@@ -629,8 +704,24 @@
       fit: runtime._fit.length,
       ranges: runtime._ranges.length,
       fitItems: runtime._fit,
-      rangeItems: runtime._ranges
+      rangeItems: runtime._ranges,
+      pinItems: runtime._pins
     };
+  };
+  var finishFlex = (data) => {
+    const board = byId(data.board);
+    if (!board) throw new Error("board not found " + data.board);
+    const children = data.children.map((entry) => [byId(entry.id), {
+      t: "rect",
+      child: entry.child,
+      x: entry.x,
+      y: entry.y,
+      w: entry.w,
+      h: entry.h
+    }]).filter(([shape]) => !!shape);
+    const pins = [];
+    switchOnFlex(board, data.node, children, pins);
+    return { pinItems: pins };
   };
   var removeMany = (ids) => {
     let removed = 0;
@@ -1115,6 +1206,10 @@
     removeMany,
     existing,
     orderChildren,
+    finishFlex,
+    layoutState,
+    setFlexProps,
+    placeAbsolute,
     stageBegin,
     stageFinish,
     stageTransfer,

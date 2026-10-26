@@ -10,7 +10,8 @@ Capture element format (produced by js/src/capture/page/elements.ts), main keys:
     i (index), p (nearest emitted ancestor or -1), tag, r [x, y, w, h], op (effective opacity),
     box {bg, bi, bw, bs, bc, radius, shadow, clip, ...}, font [family, size, weight, lineHeight,
     letterSpacing, color, align, transform, style, decoration], lines [{t, r}], src/nat/fit
-    (images), svg (sanitized markup), clip (ancestor clip rect), z/pos (stacking).
+    (images), svg (sanitized markup), clip (ancestor clip rect), z/pos (stacking),
+    lay (flex/grid container CSS, used by `layout: auto`).
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ from typing import Any
 Element = dict[str, Any]
 Node = dict[str, Any]
 
-DEFAULT_OPTIONS = {"min_section_h": 40, "group": True, "skip_transparent_clicks": True}
+DEFAULT_OPTIONS = {"min_section_h": 40, "group": True, "skip_transparent_clicks": True, "layout": "absolute"}
 
 
 class ConversionContext:

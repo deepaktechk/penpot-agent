@@ -25,7 +25,7 @@ jobs:
       - name: Lint
         run: uv run ruff check src tests
       - name: Unit tests
-        run: uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging -v
+        run: uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging tests.test_layout -v
 
   typescript:
     name: TypeScript + bundles

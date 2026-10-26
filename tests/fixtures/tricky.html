@@ -65,6 +65,8 @@
 <div id="hidden-parent" style="visibility:hidden"><p>Hidden parent line</p><p style="visibility:visible">Visible inside hidden</p></div>
 <!-- popups hidden by a zero-area clip-path until activated (pumble.com "zoom" effects): the closed ones are never painted -->
 <div id="zoom-popups" style="position:relative;height:120px"><div style="position:absolute;left:0;top:0;width:100px;height:100px;clip-path:circle(0 at 50% 50%);background:#fde68a"><p>Closed zoom popup</p><img src="icon.svg" alt="closed zoom logo" width="40" height="40"></div><div style="position:absolute;left:120px;top:0;width:100px;height:100px;clip-path:inset(50%);background:#bbf7d0"><p>Inset closed popup</p></div><div style="position:absolute;left:240px;top:0;width:100px;height:100px;clip-path:circle(100%);background:#bfdbfe"><p>Open zoom popup</p></div></div>
+<!-- flex nav (`--layout auto`): centred links with a gap and a positioned badge -> one Penpot flex board, the badge absolute -->
+<nav id="flex-nav" style="position:relative;display:flex;justify-content:center;align-items:center;gap:24px;padding:12px 20px;background:#f3f4f6;font-family:Outfit,Arial,sans-serif;font-size:15px"><a href="#" style="color:#111">Product</a><a href="#" style="color:#111">Pricing</a><a href="#" style="color:#111">Customers</a><span style="position:absolute;right:8px;top:4px;background:#ef4444;color:#fff;font-size:10px;padding:1px 4px">new</span></nav>
 <div id="cookie-consent" style="position:fixed;bottom:0;left:0;right:0;height:80px;background:#222;color:#fff">We use cookies. Accept?</div>
 <div class="intercom-launcher" style="position:fixed;right:20px;bottom:20px;width:60px;height:60px;border-radius:30px;background:#1d4ed8"></div>
 <script>
