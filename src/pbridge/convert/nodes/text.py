@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 
 from pbridge.convert import fontmetrics
 from pbridge.convert.context import ConversionContext, Element, Node
@@ -29,6 +30,11 @@ from pbridge.convert.screenshot import ScreenshotProbe
 
 ALIGN = {"center": "center", "right": "right", "end": "right", "justify": "left"}
 BOX_SLACK = 120   # extra width given to centred/right multi-line boxes so Penpot never re-wraps
+
+
+def _has_symbols(text: str) -> bool:
+    """True when the text has "other symbol" characters (★ ✓ ♥ → emoji: Unicode category So)."""
+    return any(unicodedata.category(character) == "So" for character in text)
 
 
 class TextBuilder:
@@ -212,6 +218,12 @@ class TextBuilder:
                 align_used, grow, node_width = "left", "auto-width", penpot_width
         text_spec = self._style(element, text, penpot_font, font_size, weight, line_height, letter_spacing, text_color,
                                 align_used, grow, italic, decoration, transform, right - left)
+        if grow == "auto-width" and len(texts) == 1 and lines[0]["r"][2] > 20 and _has_symbols(texts[0]):
+            # symbols (★ ✓ ♥ arrows, emoji) are often missing from subset web fonts, so Chrome and Penpot
+            # draw them with different fonts and no offline measurement is reliable; the plugin
+            # measures Penpot's real width and fits the letter spacing to the browser's (pb.fitTexts phase 1)
+            text_spec["fitW"] = round(lines[0]["r"][2], 2)
+            self.ctx.report["fit_in_penpot"] += 1
         self.ctx.report["texts"] += 1
         return [{"t": "text", "x": round(node_x, 2), "y": round(y, 2), "w": round(node_width, 2),
                  "h": round(line_height * len(texts), 2), "name": slug(texts[0]), "text": text_spec}]

@@ -32,6 +32,15 @@ def _object_position(object_position: str | None) -> list[float] | None:
         return None
 
 
+def _root_stretches(svg_markup: str | None) -> bool:
+    """True when the root <svg> says preserveAspectRatio="none" (drawn stretched to its box).
+    Only the root decides: nested <image>/<pattern> elements often say "none" for their own content."""
+    if not svg_markup:
+        return False
+    root = re.search(r"<svg\b[^>]*>", svg_markup)
+    return bool(root and re.search(r'preserveAspectRatio\s*=\s*["\']none', root.group(0)))
+
+
 class ImageBuilder:
     def __init__(self, ctx: ConversionContext):
         self.ctx = ctx
@@ -58,7 +67,7 @@ class ImageBuilder:
         if is_svg(url) and fit in ("fill", "none", None):
             # an SVG drawn by <img> keeps its own aspect (preserveAspectRatio "meet") unless it opts out
             svg_markup = self.ctx.fetch_svg(url) if vector_on else None
-            if not (svg_markup and re.search(r'preserveAspectRatio\s*=\s*["\']none', svg_markup)):
+            if not _root_stretches(svg_markup):
                 fit = "contain"
         position = _object_position(element.get("opos"))
         natural = element.get("nat") or [0, 0]            # intrinsic image size [width, height]

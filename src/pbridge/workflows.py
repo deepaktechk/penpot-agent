@@ -18,14 +18,17 @@ from pbridge.project import ProjectState
 # ---------------------------------------------------------------------- convert
 def convert_capture(state: ProjectState, capture: str | None = None, fallback_font: str = "Inter",
                     system_font: str = "Inter", flat: bool = False, font_map: str | None = None,
-                    region: tuple | None = None, out_path: str | None = None, check_fonts: bool = True) -> dict[str, Any]:
+                    region: tuple | None = None, out_path: str | None = None, check_fonts: bool = True,
+                    use_cache: bool = True) -> dict[str, Any]:
     """Capture dir (or layout.json) -> spec file. Returns a summary of the spec.
 
     check_fonts: ask Penpot which font families exist; missing ones use `fallback_font`.
     font_map: "Web Font=Penpot Font,..." overrides.
     region: (x0, y0, x1, y1) - only sections overlapping y0..y1 are kept.
+    use_cache: reuse the last spec when every input is unchanged (`run_cache.convert_key`).
     """
     from pbridge.convert import Converter, count_nodes
+    from pbridge.run_cache import RunCache, convert_key, file_digest, source_digest
     capture_path = Path(capture) if capture else Path(state.config.get("capture", ""))
     layout_file = capture_path / "layout.json" if capture_path.is_dir() else capture_path
     layout = json.loads(layout_file.read_text())
@@ -40,26 +43,49 @@ def convert_capture(state: ProjectState, capture: str | None = None, fallback_fo
             print(f"[convert] font check skipped: {str(error)[:80]}", file=sys.stderr)
     if font_map:
         opts["font_map"] = dict(pair.split("=", 1) for pair in font_map.split(","))
-    spec = Converter(layout, opts).convert(region[1] if region else None, region[3] if region else None)
     spec_file = Path(out_path) if out_path else state.path("specs", (capture_path.name or "spec") + ".json")
+    cache = RunCache(state)
+    key_options = {key: value for key, value in opts.items() if key not in ("screenshot", "available_fonts")}
+    key = convert_key(layout_file, screenshot if screenshot.exists() else None, {**key_options, "region": region, "out": str(spec_file)},
+                      opts.get("available_fonts"), source_digest())
+    cached = cache.lookup("convert", key) if use_cache else None
+    if cached and file_digest(spec_file) == cached.get("spec_digest"):   # a hand-edited spec is a miss
+        print("[convert] inputs unchanged: reusing " + spec_file.name, file=sys.stderr)
+        return {**cached["summary"], "cached": True}
+    spec = Converter(layout, opts).convert(region[1] if region else None, region[3] if region else None)
     spec_file.write_text(json.dumps(spec, ensure_ascii=False))
-    return {"spec": str(spec_file), "sections": [(board.get("key"), board["name"], board["y"], board["h"]) for board in spec["nodes"]],
-            "nodes": count_nodes(spec["nodes"]), "images": len(spec["images"]), "report": spec["report"]}
+    summary = {"spec": str(spec_file), "sections": [(board.get("key"), board["name"], board["y"], board["h"]) for board in spec["nodes"]],
+               "nodes": count_nodes(spec["nodes"]), "images": len(spec["images"]), "report": spec["report"]}
+    cache.store("convert", key, {"spec_digest": file_digest(spec_file), "summary": summary})
+    return summary
 
 
 # ---------------------------------------------------------------------- build
+def file_revision(bridge: Bridge) -> str | None:
+    """"<file id>@<revn>" of the file the plugin is connected to; Penpot bumps revn on every persisted change."""
+    try:
+        return bridge.exec("const file = penpot.currentFile; return file ? file.id + '@' + file.revn : null;")
+    except Exception as error:   # no revision -> no short-circuit, never a failed run
+        print(f"[rebuild] file revision unavailable: {str(error)[:80]}", file=sys.stderr)
+        return None
+
+
 def build_spec(bridge: Bridge, spec_path: str, parent: str | None = None, page_board: str | None = None,
                only: list[str] | None = None, replace: bool = True, font: str | None = None,
-               after: str | None = None, page: str | None = None, rebuild_all: bool = True) -> dict[str, Any]:
+               after: str | None = None, page: str | None = None, rebuild_all: bool = True,
+               staged: bool = True) -> dict[str, Any]:
     """Build a spec file. With page_board, (create and) size that board and build into it.
     With page, open (or create) that Penpot page first. rebuild_all=False keeps sections whose
-    content did not change since the last build."""
+    content did not change since the last build. staged=False builds every section in place."""
     from pbridge.build import PageBoards, SpecBuilder
     from pbridge.build.validate import validate_spec
     spec = json.loads(Path(spec_path).read_text())
     check = validate_spec(spec)
     if check.errors:      # fail before touching Penpot; `pb validate` lists everything
         raise SystemExit(f"{spec_path} is not a valid spec ({len(check.errors)} errors):\n  " + "\n  ".join(check.errors[:20]))
+    # temporary pages a crashed staged build left behind; also leaves such a page if it is open,
+    # so the page board below is looked up on a real page
+    bridge.exec("return await pb.stageCleanup(null);")
     if page:
         from pbridge.cli.commands.document import open_page
         open_page(bridge, page)
@@ -69,7 +95,7 @@ def build_spec(bridge: Bridge, spec_path: str, parent: str | None = None, page_b
         # on another page, look the board up by name there (the remembered id may be on a different page)
         parent = PageBoards(bridge).ensure(page_board, page_width, page_height, after=after, reuse_stored_id=not page)
     report = SpecBuilder(bridge).build(spec, parent=parent, only=only, replace=replace, default_font=font,
-                                       rebuild_all=rebuild_all)
+                                       rebuild_all=rebuild_all, staged_build=staged)
     report["spec_warnings"] = check.warnings
     return {key: (value[:20] if isinstance(value, list) else value) for key, value in report.items()}
 

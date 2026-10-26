@@ -18,6 +18,7 @@ plugin call, `--version`.
 | `pb doctor` | check Node.js, Chrome, bundles, MCP server and plugin; exit 1 with a `problems` list; `backend` shows the optional access-token API |
 | `pb prelude [--force]` | (re)inject the in-plugin runtime (normally automatic) |
 | `pb selftest [--no-capture] [--build]` | regression suite (source checkout only); `--build` also builds in Penpot |
+| `pb bench build\|export [--count N] [--modes …] [--parallel N]` | measure plugin cost per shape by placement (inside / top-level board, parked viewport, hidden board, empty page) and section vs whole-board exports; temporary shapes and pages are removed |
 
 ## Website → Penpot
 
@@ -25,7 +26,7 @@ plugin call, `--version`.
 |---|---|
 | `pb capture URL [--name N] [--fonts "A,B"] [--width 1920] [--widths 1440,768,390] [--hide sel] [--click sel] [--wait ms] [--selector sel] [--color-scheme dark\|light] [--cookies file.json] [--user-data-dir DIR] [--force]` | screenshot + layout dump behind the capture gate; becomes the project reference |
 | `pb convert [capture] [--fallback-font F] [--system-font F] [--font-map "Web=Penpot"] [--region y0,y1] [--flat] [--no-font-check]` | layout → spec JSON in `.pbridge/specs/` |
-| `pb rebuild [--board NAME] [--after BOARD\|'*'] --font F [--only keys] [--all] [--fix] [--hotspots N] [--montage N]` | convert → build → [autofix] → compare → render gate; sections unchanged since the last build are kept (`--all` rebuilds them too); prints the time of each stage |
+| `pb rebuild [--board NAME] [--after BOARD\|'*'] --font F [--only keys] [--all] [--no-staging] [--fix] [--hotspots N] [--montage N]` | convert → build → [autofix] → compare → render gate; sections unchanged since the last build are kept; when nothing changed at all (spec, reference, options, Penpot file revision) the last result is reused in ~2 s; `--all` re-converts and rebuilds everything; big sections on a full page are built on temporary pages (`--no-staging`: in place); prints the time of each stage |
 | `pb clone URL --board NAME [--fonts F] [--fallback-font F]` | capture → convert → build → compare in one go |
 | `pb library [--colors 12] [--types 12] [--prefix Site] [--dry]` | most used colours and text styles → Penpot library |
 | `pb tokens [--capture C] [--set Site] [--colors 12] [--dry]` | capture colours and type → a Penpot design-token set |
@@ -92,7 +93,7 @@ Metrics: `mad` mean absolute difference (0–255), `pct` % of pixels that differ
 
 | Command | Purpose |
 |---|---|
-| `pb build spec.json [--page-board NAME] [--parent target] [--only keys] [--font F] [--no-replace]` | build a spec; rebuilding a key replaces its previous shapes |
+| `pb build spec.json [--page-board NAME] [--parent target] [--only keys] [--font F] [--no-replace] [--no-staging]` | build a spec; rebuilding a key replaces its previous shapes; sections keep the spec's layer order |
 | `pb patch ops.json\|'<json>' [--snapshot target]` | apply patch operations (below) |
 | `pb rm target ...` | remove shapes |
 | `pb snapshot target [--label L]` / `pb restore L\|list [--parent target]` | save / restore a subtree |
@@ -142,5 +143,6 @@ about once a minute.
 
 `config.json` (reference, capture, page board), `assets.json` (uploaded images), `idmap.json`
 (spec key → shape id), `boxes.json` (target boxes for audit), `section_hashes.json` (content hash
-of each built section; unchanged sections are skipped on rebuild), `history.json` (render-gate runs),
+of each built section; unchanged sections are skipped on rebuild), `cache/` (convert and rebuild
+results keyed by their inputs, see `run_cache.py`), `history.json` (render-gate runs),
 and the folders `captures/`, `specs/`, `renders/`, `diffs/`, `snapshots/`.

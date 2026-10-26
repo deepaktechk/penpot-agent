@@ -36,7 +36,7 @@ interface TextLike {
 declare const penpot: {
   root: Shape;
   selection: Shape[];
-  currentFile: { name: string } | null;
+  currentFile: { id: string; name: string; revn: number; pages: any[] } | null;
   currentPage: { id: string; name: string; getShapeById(id: string): Shape | null } | null;
   fonts: { all: any[]; findByName(name: string): any };
   library: { local: any };

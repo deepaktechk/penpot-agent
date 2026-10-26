@@ -37,8 +37,11 @@ class BoxBuilder:
                     key = key_for(url); self.ctx.images[key] = url
                     background_size = box.get("bsize") or ""
                     fit = "cover" if "cover" in background_size else "contain" if "contain" in background_size else "fill"
-                    nodes.append({"t": "image", "img": key, "x": x, "y": y, "w": width, "h": height, "fit": fit,
-                                  "name": f"{element['tag']} bg image", "op": opacity if opacity < 0.999 else None})
+                    image = {"t": "image", "img": key, "x": x, "y": y, "w": width, "h": height, "fit": fit,
+                             "name": f"{element['tag']} bg image"}
+                    if opacity < 0.999:   # opaque: no key at all (the spec format has no null opacity)
+                        image["op"] = opacity
+                    nodes.append(image)
                     self.ctx.report["bg_images"] += 1
 
     def build(self, element: Element) -> list[Node]:

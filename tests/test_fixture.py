@@ -75,6 +75,29 @@ class FixtureEndToEnd(unittest.TestCase):
         slides = [node for node in self.texts if node["text"]["text"].startswith("Slide ")]
         self.assertEqual(len(slides), 1, [slide["text"]["text"] for slide in slides])
 
+    def test_lazy_images_outside_the_viewport_are_loaded(self):
+        # getfieldy.com: lazy logos right of the viewport in a marquee never loaded, the gate failed
+        self.assertEqual(self.layout["quality"]["lazyPending"], 0)
+        self.assertFalse(self.layout["quality"]["brokenImages"])
+
+    def test_collapsed_dropdown_is_not_built(self):
+        # clockify.me: the closed product switcher (visibility: collapse) was built in the nav
+        self.assertFalse([node for node in self.texts if node["text"]["text"] == "Collapsed menu item"])
+        self.assertFalse([node for node in self.nodes if node.get("name") == "collapsed logo"])
+
+    def test_zero_area_clip_path_popups_are_not_built(self):
+        # pumble.com: closed "zoom" popups (clip-path: circle(0)) were built over the app mockups
+        texts = {" ".join(node["text"]["text"].split()) for node in self.texts}   # the 100px popups wrap
+        self.assertNotIn("Closed zoom popup", texts)
+        self.assertNotIn("Inset closed popup", texts)
+        self.assertFalse([node for node in self.nodes if node.get("name") == "closed zoom logo"])
+        self.assertIn("Open zoom popup", texts)
+
+    def test_visible_child_of_a_hidden_parent_is_built(self):
+        texts = {node["text"]["text"] for node in self.texts}
+        self.assertIn("Visible inside hidden", texts)
+        self.assertNotIn("Hidden parent line", texts)
+
     def test_overlays_auto_hidden(self):
         # bug: cookie banners / chat launchers were drawn into the design
         self.assertFalse(self.find_text("We use cookies"))
@@ -161,6 +184,12 @@ class FixtureEndToEnd(unittest.TestCase):
     def test_padded_image_content_box(self):
         icons = [node for node in self.nodes if node.get("name") == "padded icon"]
         self.assertTrue(icons); self.assertAlmostEqual(icons[0]["h"], 48, delta=0.6)
+
+    def test_symbol_line_is_fitted_in_penpot(self):
+        # clockify.me ratings: browser and Penpot draw ★ with different fonts; the plugin fits the width
+        stars = [node for node in self.texts if node["text"]["text"] == "★★★★★"]
+        self.assertEqual(len(stars), 1)
+        self.assertGreater(stars[0]["text"].get("fitW", 0), 20)
 
     # ---------------- Penpot (optional)
     @unittest.skipUnless(BUILD, "build disabled (use pb selftest --build)")

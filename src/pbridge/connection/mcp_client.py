@@ -32,7 +32,8 @@ PROTOCOL_VERSION = "2025-03-26"
 USER_AGENT = f"pbridge/{__version__}"
 
 # substrings of a tool error that mean "the plugin tab is asleep / not connected"
-SUSPENDED_MARKERS = ("suspended", "heartbeat", "not connected", "no plugin", "no client", "plugin is not")
+SUSPENDED_MARKERS = ("suspended", "heartbeat", "not connected", "no plugin", "no client", "plugin is not",
+                     "no penpot instance")
 
 
 @dataclass

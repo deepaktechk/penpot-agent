@@ -6,7 +6,19 @@
   var isGenericFamily = (family) => !family || family.startsWith("-") || /^(system-ui|sans-serif|serif|monospace)$/.test(family);
 
   // src/capture/page/effective.ts
-  var UNCLIPPED = { op: 1, clip: [-1e6, -1e6, 2e6, 2e6], vis: true };
+  var UNCLIPPED = { op: 1, clip: [-1e6, -1e6, 2e6, 2e6], vis: true, rendered: true };
+  var clipsEverything = (clipPath, box) => {
+    const shape = /^(circle|ellipse|inset)\((.*)\)$/.exec(clipPath.trim());
+    if (!shape) return false;
+    const [, kind, args] = shape;
+    const sizes = args.split(/\s+at\s+/)[0].split(/\s+round\s+/)[0].trim().split(/\s+/).filter(Boolean);
+    const length = (value, reference) => value.endsWith("%") ? parseFloat(value) / 100 * reference : parseFloat(value);
+    if (kind === "circle") return sizes.length > 0 && length(sizes[0], Math.hypot(box.width, box.height) / Math.SQRT2) <= 0;
+    if (kind === "ellipse") return sizes.length === 2 && (length(sizes[0], box.width) <= 0 || length(sizes[1], box.height) <= 0);
+    const [top, right = top, bottom = top, left = right] = sizes;
+    if (top === void 0) return false;
+    return length(top, box.height) + length(bottom, box.height) >= box.height || length(left, box.width) + length(right, box.width) >= box.width;
+  };
   var createEffectiveResolver = () => {
     const cache = /* @__PURE__ */ new Map();
     const resolve = (element) => {
@@ -16,7 +28,8 @@
       const parent = resolve(element.parentElement);
       const style = getComputedStyle(element);
       const opacity = parent.op * parseFloat(style.opacity || "1");
-      const visible = parent.vis && style.visibility !== "hidden" && style.display !== "none" && style.contentVisibility !== "hidden";
+      const rendered = parent.rendered && style.display !== "none" && style.contentVisibility !== "hidden" && !(style.clipPath !== "none" && clipsEverything(style.clipPath, element.getBoundingClientRect()));
+      const visible = rendered && style.visibility !== "hidden" && style.visibility !== "collapse";
       let clip = parent.clip;
       const overflow = style.overflow + " " + style.overflowX + " " + style.overflowY;
       if (/hidden|clip|auto|scroll/.test(overflow) && element.namespaceURI !== SVGNS) {
@@ -31,7 +44,7 @@
         const right = Math.min(clip[0] + clip[2], padding.right), bottom = Math.min(clip[1] + clip[3], padding.bottom);
         clip = [left, top, Math.max(0, right - left), Math.max(0, bottom - top)];
       }
-      const effective = { op: opacity, clip, vis: visible };
+      const effective = { op: opacity, clip, vis: visible, rendered };
       cache.set(element, effective);
       return effective;
     };
@@ -622,6 +635,11 @@
   var scrollTo = (y) => window.scrollTo(0, y);
   var frameHeight = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(document.documentElement.scrollHeight))));
   var fullHeight = () => Math.ceil(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
+  var loadLazyImages = () => {
+    const lazy = [...document.images].filter((image) => image.loading === "lazy" && !image.complete);
+    for (const image of lazy) image.loading = "eager";
+    return lazy.length;
+  };
   var waitForImages = async () => {
     await Promise.all([...document.images].filter((image) => !image.complete).map((image) => new Promise((resolve) => {
       image.onload = image.onerror = () => resolve();
@@ -678,6 +696,7 @@
     scrollTo,
     frameHeight,
     fullHeight,
+    loadLazyImages,
     waitForImages,
     pauseAnimations,
     layoutSignature,

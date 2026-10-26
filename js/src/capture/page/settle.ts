@@ -17,6 +17,15 @@ export const frameHeight = (): Promise<number> =>
 /** Full document height for the single-layout screenshot. */
 export const fullHeight = (): number => Math.ceil(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
 
+/** Switch lazy images to eager loading. Scrolling down only reaches lazy images below the
+ *  viewport; those to the side (marquees, carousels, overflow-hidden strips) would never load.
+ *  Returns how many were switched. */
+export const loadLazyImages = (): number => {
+  const lazy = [...document.images].filter(image => image.loading === "lazy" && !image.complete);
+  for (const image of lazy) image.loading = "eager";
+  return lazy.length;
+};
+
 /** Resolve when every incomplete image loads or errors (8 s cap each). */
 export const waitForImages = async (): Promise<void> => {
   await Promise.all([...document.images].filter(image => !image.complete).map(image => new Promise<void>(resolve => {

@@ -187,6 +187,22 @@ class Metrics(unittest.TestCase):
         finally:
             fontmetrics.text_width, fontmetrics.fit_letter_spacing, fontmetrics.covers = original_width, original_fit, original_covers
 
+    def test_single_symbol_line_is_fitted_in_penpot(self):
+        # bug: clockify.me ratings "★★★★★": the site's Inter subset has no ★, so Chrome drew a fallback
+        # glyph (72.7 px for the line) while Penpot's full Inter has a narrower ★ (64 px). Symbols are drawn
+        # with whatever font has them, so no offline measurement is reliable; the plugin measures
+        # Penpot's real width and fits the letter spacing to the browser's (fitW, pb.fitTexts phase 1)
+        font = ["Inter", "12px", "400", "24px", "2px", "rgb(3, 169, 244)", "start", "none", "normal", "none"]
+        elements = [text_el(1, "★★★★★", [20, 5749.5, 340, 24], lines=[{"t": "★★★★★", "r": [20, 5753.5, 72.7, 15]}], font=font),
+                    text_el(2, "Plain line", [20, 5800, 340, 24], lines=[{"t": "Plain line", "r": [20, 5804, 60, 15]}], font=font),
+                    text_el(3, "Two\nlines ✓", [20, 5900, 340, 48],
+                            lines=[{"t": "Two", "r": [20, 5904, 30, 15]}, {"t": "lines ✓", "r": [20, 5928, 50, 15]}], font=font)]
+        stars, plain, two_lines = texts_of(converted_nodes(elements, {"metric_fit": False}))
+        self.assertEqual(stars["text"]["fitW"], 72.7)
+        self.assertEqual(stars["text"]["grow"], "auto-width")
+        self.assertNotIn("fitW", plain["text"])             # letters: fitted offline (or not at all), as before
+        self.assertNotIn("fitW", two_lines["text"])         # the plugin only fits auto-width single lines
+
 
     def test_scaled_text_uses_scaled_font_size(self):
         # bug: facebook.com floating label (15px, transform: scale(0.8667)) was built at 15px
@@ -203,6 +219,20 @@ class Images(unittest.TestCase):
         converter = Converter(layout(elements), opts)
         converter.fetch_svg = lambda url: svg_markup
         return all_nodes(converter.convert()["nodes"])
+
+    def test_opaque_background_image_makes_a_valid_spec(self):
+        # bug: getfieldy.com section backgrounds got "op": null (opacity 1), the spec failed validation
+        from pbridge.build.validate import validate_spec
+        section = box_el(1, -1, [0, 0, 1920, 600])
+        section["box"].update({"bi": 'url("https://example.com/hero.webp")', "bsize": "cover"})
+        faded = box_el(2, -1, [0, 600, 1920, 600])
+        faded["box"].update({"bi": 'url("https://example.com/faded.webp")', "bsize": "cover"}); faded["op"] = 0.5
+        spec = Converter(layout([section, faded])).convert()
+        images = [node for node in all_nodes(spec["nodes"]) if node.get("name") == "section bg image"]
+        self.assertEqual(len(images), 2)
+        self.assertNotIn("op", images[0])
+        self.assertEqual(images[1]["op"], 0.5)
+        self.assertEqual(validate_spec(spec).errors, [])
 
     def test_cover_svg_stays_a_cropped_image(self):
         # bug: cover-fitted SVG imported as vector got stretched -> missing section background
@@ -236,6 +266,20 @@ class Images(unittest.TestCase):
         nodes = self.convert_with_svg(
             [element], "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 75 70'><defs><clipPath id='a'/></defs></svg>")
         self.assertEqual([node for node in nodes if node.get("t") == "image"][0]["fit"], "contain")
+
+    def test_nested_preserve_aspect_none_does_not_stretch_the_svg(self):
+        # bug: pumble.com "zoom-effect-thread" (190x495 in a 490x490 box) was stretched 2.6x: an inner
+        # <image preserveAspectRatio="none"> was read as the root's; only the root <svg> decides
+        element = {"i": 1, "p": -1, "tag": "img", "r": [1193, 1827, 490, 490], "op": 1, "src": "https://example.com/thread.svg",
+                   "nat": [190, 495], "fit": "fill"}
+        markup = ("<svg xmlns='http://www.w3.org/2000/svg' width='190' height='495' viewBox='0 0 190 495'>"
+                  "<defs><pattern id='p'><image preserveAspectRatio='none' width='1' height='1'/></pattern></defs>"
+                  "<rect width='190' height='495' fill='url(#p)'/></svg>")
+        image = [node for node in self.convert_with_svg([element], markup) if node.get("t") == "image"][0]
+        self.assertEqual(image["fit"], "contain")
+        stretched = markup.replace("viewBox='0 0 190 495'>", "viewBox='0 0 190 495' preserveAspectRatio='none'>", 1)
+        image = [node for node in self.convert_with_svg([element], stretched) if node.get("t") == "image"][0]
+        self.assertEqual(image["fit"], "fill")      # the root opting out really is stretched by browsers
 
     def test_single_inner_container_is_not_descended(self):
         # bug: relaxed single-child rule replaced the hero section by its inner container

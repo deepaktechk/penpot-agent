@@ -14,4 +14,4 @@ Package map (each sub-package has one job):
     cli/         the `pb` command line (argument parsing + thin command handlers)
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

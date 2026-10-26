@@ -55,6 +55,16 @@
 </div>
 <!-- mixed scripts the fallback font lacks: letter-spacing fit used to squeeze the line (google.com language links) -->
 <p id="mixed-scripts" style="font-family:Arial,sans-serif;font-size:13px;text-align:center">Offered in: <a href="#">हिन्दी</a> <a href="#">বাংলা</a> <a href="#">తెలుగు</a> <a href="#">தமிழ்</a></p>
+<!-- symbols the Penpot font lacks: Penpot's fallback glyphs were narrower, the stars got squeezed (clockify.me ratings) -->
+<p id="star-rating" style="font-family:Outfit,Arial,sans-serif;font-size:12px;letter-spacing:2px;color:#03A9F4">★★★★★</p>
+<!-- logo marquee: lazy images right of the viewport never load by scrolling down (getfieldy.com client logos) -->
+<div id="logo-marquee" style="overflow:hidden;width:100%;height:60px"><div style="display:flex;width:max-content"><img src="icon.svg" alt="marquee logo 1" width="48" height="48" loading="lazy" style="margin-left:40px"><img src="icon.svg?second" alt="marquee logo 2" width="48" height="48" loading="lazy" style="margin-left:6000px"></div></div>
+<!-- closed dropdown hidden with visibility:collapse (clockify.me product switcher): never painted, must not be built -->
+<div id="collapsed-menu" style="position:relative;height:30px;visibility:collapse;background:#fff;border:1px solid #ddd"><p>Collapsed menu item</p><img src="icon.svg" alt="collapsed logo" width="40" height="40"></div>
+<!-- visibility is inherited but can be turned back on: the inner line IS painted -->
+<div id="hidden-parent" style="visibility:hidden"><p>Hidden parent line</p><p style="visibility:visible">Visible inside hidden</p></div>
+<!-- popups hidden by a zero-area clip-path until activated (pumble.com "zoom" effects): the closed ones are never painted -->
+<div id="zoom-popups" style="position:relative;height:120px"><div style="position:absolute;left:0;top:0;width:100px;height:100px;clip-path:circle(0 at 50% 50%);background:#fde68a"><p>Closed zoom popup</p><img src="icon.svg" alt="closed zoom logo" width="40" height="40"></div><div style="position:absolute;left:120px;top:0;width:100px;height:100px;clip-path:inset(50%);background:#bbf7d0"><p>Inset closed popup</p></div><div style="position:absolute;left:240px;top:0;width:100px;height:100px;clip-path:circle(100%);background:#bfdbfe"><p>Open zoom popup</p></div></div>
 <div id="cookie-consent" style="position:fixed;bottom:0;left:0;right:0;height:80px;background:#222;color:#fff">We use cookies. Accept?</div>
 <div class="intercom-launcher" style="position:fixed;right:20px;bottom:20px;width:60px;height:60px;border-radius:30px;background:#1d4ed8"></div>
 <script>

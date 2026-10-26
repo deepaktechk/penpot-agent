@@ -5,6 +5,10 @@
   build removes sections the new spec no longer has (no debris on the canvas).
 * Incremental: the plugin kills any task after ~120 s, so big sections are built as a board
   shell followed by packed batches (`plan.pack_batches`: by shape count and request bytes).
+* Staged: every plugin change costs time proportional to the shapes on the current page, so
+  sections with many shapes are built on an empty temporary page each and then placed on the
+  target page in one call (`js/src/plugin/staging.ts`); afterwards the sections get the spec's
+  layer order back (`pb.orderChildren`, fewest moves).
 * Skips unchanged sections: a section whose content hash (`plan.section_hash`) matches the
   last build and whose shapes still exist is kept as is (`rebuild_all=True` forces a rebuild).
   idmap/boxes/hashes are saved after every section, so a crashed build resumes.
@@ -25,12 +29,15 @@ from collections.abc import Callable
 from typing import Any
 
 from pbridge.assets.store import AssetStore
-from pbridge.build.plan import node_cost, pack_batches, section_hash
+from pbridge.build.plan import node_cost, pack_batches, section_hash, shape_estimate, staging_saves_time
 from pbridge.build.spec_tree import Node, assign_keys, flatten, node_box, offset_nodes
 from pbridge.connection import Bridge
 
 REMOVE_JS = "return pb.removeMany(DATA);"                  # DATA: shape ids
 BUILD_JS = "return pb.buildMany(DATA.n, DATA.p);"          # DATA.n: nodes, DATA.p: parent id
+# a section that fits one call, staged: new temporary page, build at its top level, make it a component
+STAGED_BUILD_JS = ("const begin = await pb.stageBegin(); const result = pb.buildMany(DATA.n, null);"
+                   "result.begin = begin; result.staged = pb.stageFinish(result.ids[DATA.key]); return result;")
 PARENT_ORIGIN_JS = "const parent = DATA ? pb.byId(DATA) : null; return parent ? [parent.x, parent.y] : [0, 0];"
 
 
@@ -44,18 +51,21 @@ class SpecBuilder:
         self.assets = AssetStore(bridge)
         self._fit_items: list = []
         self._range_items: list = []
+        self._target_page: str | None = None   # page the sections end up on (set by _plan_staging)
 
     # ------------------------------------------------------------------ public
     def build(self, spec: dict | list, parent: str | None = None, only: list[str] | None = None, replace: bool = True,
               progress: Callable[[str], Any] = print, default_font: str | None = None,
-              rebuild_all: bool = False) -> dict[str, Any]:
+              rebuild_all: bool = False, staged_build: bool = True) -> dict[str, Any]:
         """Build top-level spec nodes (sections) under `parent`. Returns a build report.
 
         only: section keys or names to (re)build; replace=False keeps previously built shapes.
         rebuild_all: also rebuild sections whose content did not change since the last build.
+        staged_build: build big sections on temporary pages and move them in (see `_build_staged`).
         """
         nodes = spec["nodes"] if isinstance(spec, dict) else spec
         nodes = assign_keys(nodes)
+        section_order = [node["key"] for node in nodes]   # all sections, also with `only` (layer order)
         if only:
             nodes = [node for node in nodes if node["key"] in only or node.get("name") in only]
         self._upload_images(spec, nodes, progress)
@@ -87,18 +97,8 @@ class SpecBuilder:
         if origin_x or origin_y:
             nodes = offset_nodes(copy.deepcopy(nodes), origin_x, origin_y)
         self._fit_items, self._range_items = [], []
-        for section in nodes:
-            if section["key"] in unchanged:
-                report["skipped"].append(section["key"])
-                progress(f"  = {section['key']} {section.get('name', '')[:40]} (unchanged)")
-                continue
-            started = time.time()
-            try:
-                result = self._build_node(section, parent)
-            except Exception as error:
-                report["failed"].append({"key": section["key"], "name": section.get("name"), "error": str(error)[:400]})
-                progress(f"  ✗ {section['key']} {section.get('name', '')}: {str(error)[:200]}")
-                continue
+
+        def record(section: Node, result: dict, started: float, how: str = "") -> None:
             idmap.update(result["ids"])
             for node in flatten([section]):
                 box = node_box(node)
@@ -112,12 +112,111 @@ class SpecBuilder:
             self.state.save_json("idmap.json", idmap)
             self.state.save_json("boxes.json", boxes)
             self.state.save_json("section_hashes.json", hashes)
-            progress(f"  ✓ {section['key']} {section.get('name', '')[:40]} ({len(result['ids'])} shapes, {time.time() - started:.1f}s)")
+            progress(f"  ✓ {section['key']} {section.get('name', '')[:40]} ({len(result['ids'])} shapes, "
+                     f"{time.time() - started:.1f}s{how})")
+
+        def fail(section: Node, error: Exception | str) -> None:
+            report["failed"].append({"key": section["key"], "name": section.get("name"), "error": str(error)[:400]})
+            progress(f"  ✗ {section['key']} {section.get('name', '')}: {str(error)[:200]}")
+
+        to_build = []
+        for section in nodes:
+            if section["key"] in unchanged:
+                report["skipped"].append(section["key"])
+                progress(f"  = {section['key']} {section.get('name', '')[:40]} (unchanged)")
+            else:
+                to_build.append(section)
+        staged = self._plan_staging(to_build) if staged_build else []
+        for section in to_build:        # everything not worth staging: straight onto the target page
+            if section in staged:
+                continue
+            started = time.time()
+            try:
+                record(section, self._build_node(section, parent), started)
+            except Exception as error:
+                fail(section, error)
+        if staged:
+            self._build_staged(staged, parent, record, fail, progress)
+        if report["built"]:   # rebuilt and staged sections were appended on top: restore the spec's layer order
+            order = self.bridge.exec("return pb.orderChildren(DATA);", data=[idmap[key] for key in section_order if key in idmap])
+            if not order.get("ok"):
+                report["warnings"].append("section layer order could not be restored")
         self._post_texts(report)
         self.state.save_json("idmap.json", idmap)
         self.state.save_json("boxes.json", boxes)
         self.state.save_json("section_hashes.json", hashes)
         return report
+
+    # ------------------------------------------------------------------ staged builds
+    def _plan_staging(self, sections: list[Node]) -> list[Node]:
+        """Sections worth a temporary page (`plan.staging_saves_time`), decided in build order: the
+        target page grows only by the sections built on it, staged ones arrive at the end."""
+        candidates = [section for section in sections if section.get("t") in ("board", "group")]
+        if not any(staging_saves_time(shape_estimate(section), 100_000) for section in candidates):
+            return []    # nothing could pay off even on a huge page: skip the count
+        # the target page is remembered here: a failed staged call leaves Penpot on a temporary page
+        page_shapes, self._target_page = self.bridge.exec(
+            "return [penpot.currentPage.findShapes({}).length, penpot.currentPage.id];")
+        staged = []
+        for section in sections:
+            shapes = shape_estimate(section)
+            if section in candidates and staging_saves_time(shapes, page_shapes):
+                staged.append(section)
+            else:
+                page_shapes += shapes
+        return staged
+
+    def _build_staged(self, sections: list[Node], parent: str | None, record: Callable, fail: Callable,
+                      progress: Callable[[str], Any]) -> None:
+        """Build each section on its own temporary page, then place them all on the target page in
+        one call (component instance + detach) and translate the ids (staging id -> final id)."""
+        target_page = self._target_page
+        built: list[tuple[Node, dict, dict, float]] = []
+        try:
+            for section in sections:
+                started = time.time()
+                fit_before, ranges_before = len(self._fit_items), len(self._range_items)
+                try:
+                    if self._fits_one_batch(section):    # page, build and component in one round trip
+                        result = self.bridge.exec(STAGED_BUILD_JS, data={"n": [{**section, "tag": section.get("tag", section["key"])}],
+                                                                         "key": section["key"]}, timeout=600)
+                        result.pop("begin", None)
+                        staged = result.pop("staged")
+                        self._fit_items += result.pop("fitItems", None) or []
+                        self._range_items += result.pop("rangeItems", None) or []
+                    else:
+                        self.bridge.exec("return await pb.stageBegin();")
+                        result = self._build_node(section, None)        # top level of the temporary page
+                        staged = self.bridge.exec("return pb.stageFinish(DATA);", data=result["ids"][section["key"]])
+                    built.append((section, result, staged, started))
+                except Exception as error:
+                    del self._fit_items[fit_before:], self._range_items[ranges_before:]
+                    fail(section, error)
+            if not built:
+                return
+            transfer_started = time.time()
+            try:
+                transfer = self.bridge.exec("return await pb.stageTransfer(DATA.items, DATA.page, DATA.parent);",
+                                            data={"items": [staged for _, _, staged, _ in built], "page": target_page,
+                                                  "parent": parent}, timeout=300)
+            except Exception as error:   # not retried: a repeat would place the copies twice
+                for section, _, _, _ in built:
+                    fail(section, "staged transfer: " + str(error))
+                return
+        finally:
+            if target_page:
+                self.bridge.exec("return await pb.stageCleanup(DATA);", data=target_page)
+        progress(f"  → {len(transfer['roots'])} staged sections placed in {time.time() - transfer_started:.1f}s")
+        final_ids = transfer["ids"]
+        failed = {item["component"]: item["error"] for item in transfer["failed"]}
+        for section, result, staged, started in built:
+            if staged["component"] in failed:
+                fail(section, "staged transfer: " + failed[staged["component"]])
+                continue
+            result["ids"] = {key: final_ids.get(shape_id, shape_id) for key, shape_id in result["ids"].items()}
+            record(section, result, started, ", staged")
+        for item in self._fit_items + self._range_items:   # text post-passes run on the final shapes
+            item["id"] = final_ids.get(item["id"], item["id"])
 
     # ------------------------------------------------------------------ bookkeeping
     def _unchanged_sections(self, nodes: list[Node], section_hashes: dict, hashes: dict, idmap: dict) -> set[str]:

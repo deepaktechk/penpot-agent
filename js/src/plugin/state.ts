@@ -9,8 +9,9 @@ export const VERSION = "__PB_VERSION__";   // replaced by Python with the sha1 o
 
 /** A text waiting for width fitting: target width `w`, anchor x, alignment, multi-line flag. */
 export interface FitItem { id: string; w: number; anchor: number; align: string; multi: boolean; text: string }
-/** A text whose range styles [start, end, style] must be verified after Penpot settles. */
-export interface RangeItem { id: string; ranges: [number, number, any][]; font: string }
+/** A text whose range styles [start, end, style] must be verified after Penpot settles; `base` is
+ *  the style the text outside the ranges must keep (colour, weight, size). */
+export interface RangeItem { id: string; ranges: [number, number, any][]; font: string; base?: { color?: any; weight?: number | string; size?: number } }
 
 export interface RuntimeState {
   version: string;

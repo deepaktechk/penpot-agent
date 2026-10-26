@@ -1,6 +1,7 @@
 name: Release
 
 # Push a tag like v0.2.0 to build the package, create a GitHub release and (optionally) publish to PyPI.
+# The release notes are the tag's section of CHANGELOG.md ("## [0.2.0] - date"); a tag without one fails.
 # PyPI publishing uses trusted publishing: configure it on pypi.org for this repository and the
 # `pypi` environment, then set the repository variable PUBLISH_TO_PYPI=true.
 
@@ -21,11 +22,20 @@ jobs:
         run: |
           version=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
           test "v$version" = "$GITHUB_REF_NAME" || { echo "::error::pyproject version $version != tag $GITHUB_REF_NAME"; exit 1; }
+      - name: Release notes from CHANGELOG.md
+        run: |
+          heading="## [${GITHUB_REF_NAME#v}]"
+          awk -v heading="$heading" 'index($0, heading) == 1 {found = 1; next} found && /^(## \[|\[[^]]*\]: )/ {exit} found' CHANGELOG.md > release-notes.md
+          grep -q '[^[:space:]]' release-notes.md || { echo "::error::CHANGELOG.md has no section '$heading'"; exit 1; }
       - run: uv build
       - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release-notes.md
 
   github-release:
     needs: build
@@ -37,9 +47,13 @@ jobs:
         with:
           name: dist
           path: dist/
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-notes
       - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
+          body_path: release-notes.md
           generate_release_notes: true
 
   pypi:

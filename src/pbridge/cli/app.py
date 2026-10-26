@@ -15,7 +15,7 @@ from pbridge.connection import PluginSuspended, redact
 
 # order of commands in `pb -h`, grouped by topic
 COMMAND_ORDER = [
-    "init", "doctor", "prelude", "selftest",                                   # setup
+    "init", "doctor", "prelude", "selftest", "bench",                          # setup
     "run", "eval",                                                             # scripting
     "tree", "find", "inspect", "stats", "lint",                                # inspect
     "page", "version", "code", "tokens",                                       # the file: pages, versions, code, tokens

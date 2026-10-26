@@ -25,5 +25,20 @@ class Transport(unittest.TestCase):
         self.assertEqual(request.get_header("User-agent"), f"pbridge/{__version__}")
 
 
+class PluginAway(unittest.TestCase):
+    def test_no_penpot_instance_means_wait_for_the_plugin(self):
+        # 2026-10-26: the server answered "No Penpot instance connected for user token" while the tab was
+        # away; pb treated it as a script error and failed at once instead of notifying and waiting
+        from pbridge.connection.errors import PluginSuspended
+        client = MCPClient("http://localhost:4401/mcp", retries=0)
+        reply = {"isError": True, "content": [{"type": "text", "text": "Tool execution failed: Error: No Penpot instance "
+                                                                       "connected for user token. Please ensure that Penpot is connected"}]}
+        with mock.patch.object(client, "rpc", return_value=reply), \
+                mock.patch.object(client, "wait_for_plugin", return_value=False) as wait:
+            with self.assertRaises(PluginSuspended):
+                client.call("execute_code", {"code": "return 1;"})
+        wait.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

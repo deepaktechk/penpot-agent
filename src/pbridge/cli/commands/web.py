@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from pbridge.capture import CaptureOptions, capture_site, capture_widths
 from pbridge.cli.support import TARGET_HELP, Args, get_bridge, out, parse_region, render_for, require_reference, resolve_target
 from pbridge.project import ProjectState
+from pbridge.run_cache import RunCache, file_digest, rebuild_key
 from pbridge.timing import StageTimer
-from pbridge.workflows import audit_render, build_responsive, build_spec, compare_render, convert_capture, run_qa
+from pbridge.workflows import (audit_render, build_responsive, build_spec, compare_render, convert_capture, file_revision,
+                               run_qa)
 
 
 def _widths(text: str) -> list[int]:
@@ -101,13 +104,23 @@ def cmd_rebuild(args: Args) -> int:
     state = ProjectState.open()
     with timer.stage("convert"):
         out(convert_capture(state, state.config.get("capture"), fallback_font=args.font, system_font=args.system_font,
-                            font_map=args.font_map), compact)
+                            font_map=args.font_map, use_cache=not args.all), compact)
     spec_path = str(state.spec_path())
     bridge = get_bridge(args)
+    cache = RunCache(state)
+    options = {key: value for key, value in vars(args).items() if key not in ("handler", "compact", "verbose")}
+    cache_key = rebuild_key(file_digest(Path(spec_path)), file_digest(Path(require_reference(bridge))), bridge.version, options)
+    if not args.all:
+        previous = cache.reusable_rebuild(cache_key, file_revision(bridge), state.config.get("page_board"))
+        if previous:
+            print("[rebuild] nothing changed since the last run (spec, reference, options, Penpot file revision): "
+                  "reusing its result; --all forces a fresh run", file=sys.stderr)
+            out({**previous["result"], "cached": True, "render": previous["render"], "seconds": timer.summary()}, compact)
+            return 0 if previous["result"].get("ok") else 1
     with timer.stage("build"):
         out(build_spec(bridge, spec_path, page_board=args.board or state.config.get("page_board_name") or "Page",
                        only=args.only.split(",") if args.only else None, font=args.font, after=getattr(args, "after", None),
-                       page=args.page, rebuild_all=args.all), compact)
+                       page=args.page, rebuild_all=args.all, staged=not args.no_staging), compact)
     fresh_render = Args(render=None, target="page", fast=False)
     reference = require_reference(bridge)
     with timer.stage("export"):
@@ -124,6 +137,8 @@ def cmd_rebuild(args: Args) -> int:
     with timer.stage("compare+qa"):
         out(compare_render(bridge, reference, render, n_hotspots=args.hotspots, n_montage=args.montage), compact)
         ok, summary = run_qa(bridge.state, render, spec_path)
+    # read last: the run's final edit is an export + QA old, so Penpot has persisted it by now
+    cache.store_rebuild(cache_key, file_revision(bridge), state.config.get("page_board"), str(render), summary)
     out({**summary, "seconds": timer.summary()}, compact)
     return 0 if ok else 1
 
@@ -220,7 +235,9 @@ def add_rebuild(subparsers) -> None:
     parser.add_argument("--after", help="place a new page board right of this board ('*' = right of everything)")
     parser.add_argument("--page", help="build on this Penpot page (created when missing)")
     parser.add_argument("--all", action="store_true",
-                        help="rebuild every section, also those whose spec did not change since the last build")
+                        help="rebuild every section and re-convert, also when nothing changed since the last run")
+    parser.add_argument("--no-staging", action="store_true",
+                        help="build every section in place instead of on temporary pages (slower on big pages)")
     parser.set_defaults(handler=cmd_rebuild)
 
 

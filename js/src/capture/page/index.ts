@@ -6,11 +6,12 @@
 import { dumpLayout } from "./layout";
 import { fontPaintDeviation, fontsReady, forceLoadFonts, requiredFontsLoaded, warmupFonts } from "./fonts";
 import { hideOverlays } from "./overlays";
-import { applyHideAndFreeze, frameHeight, fullHeight, layoutSignature, pauseAnimations, scrollHeight, scrollTo, stopTimers, waitForImages } from "./settle";
+import { applyHideAndFreeze, frameHeight, fullHeight, layoutSignature, loadLazyImages, pauseAnimations, scrollHeight, scrollTo, stopTimers,
+  waitForImages } from "./settle";
 
 export const pageApi = {
   warmupFonts, fontsReady, fontPaintDeviation, requiredFontsLoaded, forceLoadFonts,
-  scrollHeight, scrollTo, frameHeight, fullHeight, waitForImages,
+  scrollHeight, scrollTo, frameHeight, fullHeight, loadLazyImages, waitForImages,
   pauseAnimations, layoutSignature, stopTimers, hideOverlays, applyHideAndFreeze,
   dumpLayout,
 };

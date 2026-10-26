@@ -5,7 +5,7 @@
 //   1. warm-up visit           fill the HTTP cache with the web fonts
 //   2. load with real fonts    reload while text is painted with a fallback font (font-display: swap)
 //   3. clicks                  --click selectors (consent buttons, tabs)
-//   4. lazy content            scroll through the page
+//   4. lazy content            scroll through the page; lazy images still unreached (to the side) load eagerly
 //   5. fonts                   required families loaded, every used face force-loaded
 //   6. reflow + images         stable document height, all images complete
 //   7. freeze                  pause animations, wait for stillness, stop JS timers
@@ -21,7 +21,7 @@ import { applyHideAndFreeze, freezeMotion, hideOverlays } from "./steps/freeze";
 import { FontDisplayOverride } from "./steps/font-display";
 import { loadWithRealFonts, warmUp } from "./steps/load";
 import { prepareSession } from "./steps/session";
-import { clickAll, forceFonts, triggerLazyContent, waitForImages, waitForRequiredFonts, waitStableHeight } from "./steps/prepare";
+import { clickAll, forceFonts, loadLazyImages, triggerLazyContent, waitForImages, waitForRequiredFonts, waitStableHeight } from "./steps/prepare";
 
 const CHROME_ARGS = ["--hide-scrollbars", "--force-color-profile=srgb", "--font-render-hinting=none"];
 
@@ -45,6 +45,7 @@ export const runCapture = async (argv: string[]): Promise<void> => {
   await waitForRequiredFonts(page, opts.fonts);
   await forceFonts(page);
   await waitStableHeight(page);
+  await loadLazyImages(page);
   await waitForImages(page);
   const stable = opts.freeze ? await freezeMotion(page) : null;
   if (!opts.keepOverlays) await hideOverlays(page);

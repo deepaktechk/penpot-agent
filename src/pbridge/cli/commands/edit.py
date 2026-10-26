@@ -25,7 +25,7 @@ def cmd_build(args: Args) -> None:
     parent = resolve_target(bridge, args.parent) if args.parent else None
     report = build_spec(bridge, args.spec, parent=parent, page_board=args.page_board,
                         only=args.only.split(",") if args.only else None, replace=not args.no_replace, font=args.font,
-                        after=getattr(args, "after", None), page=args.page)
+                        after=getattr(args, "after", None), page=args.page, staged=not args.no_staging)
     out(report, args)
 
 
@@ -80,6 +80,8 @@ def add_build(subparsers) -> None:
     parser.add_argument("--font", help="default font family")
     parser.add_argument("--after", help="place a new page board right of this board ('*' = right of everything)")
     parser.add_argument("--page", help="build on this Penpot page (created when missing)")
+    parser.add_argument("--no-staging", action="store_true",
+                        help="build every section in place instead of on temporary pages (slower on big pages)")
     parser.set_defaults(handler=cmd_build)
 
 

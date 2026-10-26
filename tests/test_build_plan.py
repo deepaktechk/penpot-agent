@@ -2,7 +2,7 @@
 import json
 import unittest
 
-from pbridge.build.plan import node_cost, pack_batches, section_hash
+from pbridge.build.plan import node_cost, pack_batches, section_hash, shape_estimate, staging_saves_time
 
 
 def text_node(key: str, text: str = "Hello") -> dict:
@@ -38,6 +38,26 @@ class PackBatches(unittest.TestCase):
     def test_cost_counts_every_descendant(self):
         tree = {"t": "board", "children": [{"t": "group", "children": [text_node("x"), text_node("y")]}]}
         self.assertEqual(node_cost(tree), 4)
+
+
+class StagingCostModel(unittest.TestCase):
+    """Measured 2026-10-26 (Clockify): a change costs ~0.032 ms more per shape on the page; a staged
+    section costs ~1.5 s of page switching / component / transfer. Stage only when it saves time."""
+
+    def test_shape_estimate_counts_the_shapes_an_svg_becomes(self):
+        svg = {"t": "svg", "svg": "<svg><g><path d='M0'/><path d='M1'/><circle r='2'/></g><rect/></svg>"}
+        self.assertEqual(shape_estimate({"t": "board", "children": [svg, text_node("a")]}), 1 + 1 + 5 + 1)
+
+    def test_big_section_on_a_full_page_is_staged(self):
+        # Footer: 161 shapes on a ~1240-shape page saved 5.9 s when staged
+        self.assertTrue(staging_saves_time(161, 1240))
+
+    def test_sections_on_an_almost_empty_page_are_built_in_place(self):
+        self.assertFalse(staging_saves_time(161, 50))
+        self.assertFalse(staging_saves_time(75, 3))
+
+    def test_small_sections_are_built_in_place_even_on_a_full_page(self):
+        self.assertFalse(staging_saves_time(20, 1400))
 
 
 class SectionHash(unittest.TestCase):

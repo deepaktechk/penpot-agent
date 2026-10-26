@@ -1,6 +1,7 @@
 # Fast build — plan and checklist
 
 > **Status: plugin route done (2026-10-26); offline route spiked, not adopted.** Tick items as they land and keep the numbers current.
+> Next steps: [fast-build-v2.md](fast-build-v2.md).
 > Goal: a clone like clockify.me builds in **~10–45 s instead of ~4–6 min**, with the same accuracy
 > (`pb qa` diff % must not get worse) and fewer things that can stall.
 

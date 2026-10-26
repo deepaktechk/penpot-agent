@@ -10,7 +10,7 @@
       "name": "penpot-agent",
       "description": "Convert any website into an editable, pixel-accurate Penpot design, then inspect, edit, export and visually QA it - through the Penpot MCP server.",
       "source": "./",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "category": "design",
       "tags": [
         "penpot",

@@ -44,4 +44,10 @@ export const waitStableHeight = async (page: Page): Promise<void> => {
   }
 };
 
+/** Lazy images the scroll could not reach (to the side of the viewport) load eagerly. */
+export const loadLazyImages = async (page: Page): Promise<void> => {
+  const switched = await pageCall(page, "loadLazyImages");
+  if (switched) log(`lazy images outside the scrolled area loaded eagerly: ${switched}`);
+};
+
 export const waitForImages = async (page: Page): Promise<void> => { await pageCall(page, "waitForImages"); };

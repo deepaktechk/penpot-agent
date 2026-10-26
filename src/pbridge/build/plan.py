@@ -7,11 +7,18 @@
 * section_hash: content hash of a section subtree plus the build context (fonts, origin).
   An unchanged hash means the shapes built last time are still right, so the section can
   be skipped on rebuild (and a crashed build resumes where it stopped).
+* staging_saves_time: cost model deciding whether a section is built on a temporary page
+  (`SpecBuilder._build_staged`). Measured 2026-10-26 (`pb bench build`, Clockify): every change
+  costs ~0.032 ms more per shape already on the page (a rectangle: 15 ms on an empty page,
+  60 ms at 1427 shapes), and real nodes cost ~30 ms each even on an empty page. A staged section
+  pays ~1.5 s for the page switch, the component and its share of the transfer, so only big
+  sections on a full page gain (Footer, 161 shapes at ~1240 page shapes: 11.6 s -> 5.7 s).
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from pbridge.build.spec_tree import Node
@@ -20,6 +27,23 @@ from pbridge.build.spec_tree import Node
 def node_cost(node: Node) -> int:
     """Number of shapes a node creates: itself plus every descendant."""
     return 1 + sum(node_cost(child) for child in node.get("children", []))
+
+
+# SVG elements Penpot's SVG import turns into shapes of their own
+_SVG_SHAPE_RE = re.compile(r"<(?:g|path|rect|circle|ellipse|line|polyline|polygon)[\s/>]")
+PAGE_SHAPE_COST_MS = 0.032       # extra cost of one change per shape already on the page
+STAGE_OVERHEAD_MS = 1500.0       # temporary page + component + transfer share, per staged section
+
+
+def shape_estimate(node: Node) -> int:
+    """Shapes a node really creates in Penpot: node_cost plus the shapes inside imported SVGs."""
+    own = len(_SVG_SHAPE_RE.findall(node["svg"])) if node.get("t") == "svg" and isinstance(node.get("svg"), str) else 0
+    return 1 + own + sum(shape_estimate(child) for child in node.get("children", []))
+
+
+def staging_saves_time(section_shapes: int, page_shapes: int) -> bool:
+    """True when building on an empty temporary page saves more than the staging overhead."""
+    return section_shapes * page_shapes * PAGE_SHAPE_COST_MS > STAGE_OVERHEAD_MS
 
 
 def _json_size(node: Node) -> int:

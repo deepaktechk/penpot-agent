@@ -72,6 +72,9 @@ docs/                  documentation
 
 ## Planned
 
+- **Fast build v2**: no-op short-circuit, convert and per-section render caches, a keyed
+  reconciler, a fix for the quadratic build cost, and exactly-once plugin calls.
+  Plan: [fast-build-v2.md](fast-build-v2.md).
 - **Targeted update** (`pb update`): replace one element's layers in place instead of a
   whole section. Design: [targeted-update.md](targeted-update.md).
 - **Offline build** (spiked, not adopted): compile the spec into a `.penpot` file with

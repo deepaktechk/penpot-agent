@@ -1,6 +1,6 @@
 [project]
 name = "penpot-agent"
-version = "0.1.0"
+version = "0.1.1"
 description = "Convert any website into an editable, pixel-accurate Penpot design (HTML to Penpot) via the Penpot MCP server - CLI and Claude Code plugin with visual QA."
 readme = "README.md"
 license = "GPL-3.0-or-later"

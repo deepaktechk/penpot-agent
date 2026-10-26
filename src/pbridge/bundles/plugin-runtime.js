@@ -361,7 +361,12 @@
       }
       applyTextStyle(text.getRange(start, end), style, baseFont);
     }
-    if (ranges.length) runtime._ranges.push({ id: text.id, ranges, font: spec.font || runtime.defaultFont || "Inter" });
+    if (ranges.length) runtime._ranges.push({
+      id: text.id,
+      ranges,
+      font: spec.font || runtime.defaultFont || "Inter",
+      base: { color: spec.color ?? "#000000", weight: spec.weight ?? 400, size: spec.size }
+    });
   };
   var fitTexts = (items, phase) => {
     let changed = 0;
@@ -390,29 +395,51 @@
     }
     return changed;
   };
+  var gapsBetween = (ranges, length) => {
+    const gaps = [];
+    let covered = 0;
+    for (const [start, end] of ranges.slice().sort((first, second) => first[0] - second[0])) {
+      if (start > covered) gaps.push([covered, start]);
+      covered = Math.max(covered, end);
+    }
+    if (covered < length) gaps.push([covered, length]);
+    return gaps;
+  };
+  var unmet = (range, style) => {
+    const normalize = (color) => String(color || "").toUpperCase();
+    const missing = {};
+    if (style.color !== void 0 && !(style.color && style.color.g)) {
+      const wanted = isArray(style.color) ? style.color[0] : style.color;
+      const got = isArray(range.fills) && range.fills[0] ? range.fills[0].fillColor : null;
+      if (normalize(got) !== normalize(wanted)) missing.color = style.color;
+    }
+    if (style.weight !== void 0 && String(range.fontWeight) !== String(style.weight)) missing.weight = style.weight;
+    if (style.size !== void 0 && String(range.fontSize) !== String(style.size)) missing.size = style.size;
+    return missing;
+  };
   var verifyRanges = (items) => {
     let fixed = 0;
     const bad = [];
-    const normalize = (color) => String(color || "").toUpperCase();
     for (const item of items) {
       const text = byId(item.id);
       if (!text) continue;
-      for (const [start, end, style] of item.ranges) {
+      const checks = item.ranges.map(([start, end, style]) => [start, end, style]);
+      if (item.base) {
+        const characters = String(text.characters || "");
+        for (let [start, end] of gapsBetween(item.ranges, characters.length)) {
+          while (start < end && characters[start] === "\n") start++;
+          while (end > start && characters[end - 1] === "\n") end--;
+          if (start < end) checks.push([start, end, item.base]);
+        }
+      }
+      for (const [start, end, style] of checks) {
         try {
           const range = text.getRange(start, end);
-          let ok = true;
-          if (style.color !== void 0 && !(style.color && style.color.g)) {
-            const wanted = isArray(style.color) ? style.color[0] : style.color;
-            const got = isArray(range.fills) && range.fills[0] ? range.fills[0].fillColor : null;
-            if (normalize(got) !== normalize(wanted)) ok = false;
-          }
-          if (style.weight !== void 0 && String(range.fontWeight) !== String(style.weight)) ok = false;
-          if (style.size !== void 0 && String(range.fontSize) !== String(style.size)) ok = false;
-          if (!ok) {
-            applyTextStyle(range, style, font(item.font));
-            fixed++;
-            bad.push([item.id, start, end]);
-          }
+          const missing = unmet(range, style);
+          if (!Object.keys(missing).length) continue;
+          applyTextStyle(range, style === item.base ? missing : style, font(item.font));
+          fixed++;
+          bad.push([item.id, start, end]);
         } catch (error) {
           bad.push([item.id, start, end, String(error.message || error)]);
         }
@@ -615,6 +642,42 @@
       }
     }
     return removed;
+  };
+  var longestIncreasing = (values) => {
+    const tails = [];
+    const previous2 = new Array(values.length).fill(-1);
+    for (let i = 0; i < values.length; i++) {
+      let low = 0, high = tails.length;
+      while (low < high) {
+        const middle = low + high >> 1;
+        if (values[tails[middle]] < values[i]) low = middle + 1;
+        else high = middle;
+      }
+      if (low > 0) previous2[i] = tails[low - 1];
+      tails[low] = i;
+    }
+    const run = [];
+    for (let i = tails.length ? tails[tails.length - 1] : -1; i >= 0; i = previous2[i]) run.push(i);
+    return run.reverse();
+  };
+  var orderChildren = (ids) => {
+    const shapes = ids.map(byId).filter(Boolean);
+    const keep = new Set(longestIncreasing(shapes.map((shape) => shape.parentIndex)));
+    let moves = 0;
+    shapes.forEach((shape, i) => {
+      if (keep.has(i)) return;
+      if (i > 0) {
+        const target = shapes[i - 1].parentIndex;
+        shape.setParentIndex(shape.parentIndex > target ? target + 1 : target);
+      } else {
+        const successor = shapes.find((_, j) => j > 0 && keep.has(j));
+        if (!successor || shape.parentIndex < successor.parentIndex) return;
+        shape.setParentIndex(successor.parentIndex);
+      }
+      moves++;
+    });
+    const final = shapes.map((shape) => shape.parentIndex);
+    return { moves, ok: final.every((index, i) => i === 0 || index > final[i - 1]) };
   };
   var existing = (ids) => ids.filter((id) => !!byId(id));
   var groupShapes = (ids, name) => {
@@ -846,6 +909,89 @@
     return entry(root, depth);
   };
 
+  // src/plugin/staging.ts
+  var STAGING_MARK = "staging";
+  var filePages = () => penpot.currentFile && penpot.currentFile.pages || [];
+  var preorder = (shape, ids = []) => {
+    ids.push(shape.id);
+    for (const child of shape.children || []) preorder(child, ids);
+    return ids;
+  };
+  var isStagingPage = (page) => {
+    try {
+      return page.getPluginData("pb") === STAGING_MARK;
+    } catch (error) {
+      return false;
+    }
+  };
+  var stageBegin = async () => {
+    const previous2 = penpot.currentPage ? penpot.currentPage.id : null;
+    const page = penpot.createPage();
+    page.name = "pb staging (temporary)";
+    page.setPluginData("pb", STAGING_MARK);
+    await penpot.openPage(page);
+    return { page: page.id, previous: previous2 };
+  };
+  var stageFinish = (rootId) => {
+    const root = byId(rootId);
+    if (!root) throw new Error("staged section not found " + rootId);
+    const order = preorder(root);
+    const component = penpot.library.local.createComponent([root]);
+    if (!component) throw new Error("could not make a component of " + root.name);
+    return { component: component.id, order, x: root.x, y: root.y };
+  };
+  var stageTransfer = async (items, pageId, parentId) => {
+    const page = filePages().find((candidate) => candidate.id === pageId);
+    if (!page) throw new Error("target page not found " + pageId);
+    await penpot.openPage(page);
+    const parent = parentId ? byId(parentId) : penpot.root;
+    if (!parent) throw new Error("parent not found " + parentId);
+    const ids = {};
+    const roots = [];
+    const failed = [];
+    for (const item of items) {
+      let copy = null;
+      try {
+        const component = penpot.library.local.components.find((candidate) => candidate.id === item.component);
+        if (!component) throw new Error("staged component not found " + item.component);
+        copy = component.instance();
+        parent.appendChild(copy);
+        copy.x = item.x;
+        copy.y = item.y;
+        copy.detach();
+        const copied = preorder(copy);
+        if (copied.length !== item.order.length) throw new Error(`staged copy has ${copied.length} shapes, expected ${item.order.length}`);
+        item.order.forEach((stagedId, i) => {
+          ids[stagedId] = copied[i];
+        });
+        roots.push(copy.id);
+      } catch (error) {
+        if (copy) {
+          try {
+            copy.remove();
+          } catch (_) {
+          }
+        }
+        failed.push({ component: item.component, error: String(error && error.message || error) });
+      }
+    }
+    return { ids, roots, failed };
+  };
+  var stageCleanup = async (pageId) => {
+    const pages = filePages();
+    const current = penpot.currentPage && pages.find((candidate) => candidate.id === penpot.currentPage.id);
+    const target = pages.find((candidate) => candidate.id === pageId) || (current && !isStagingPage(current) ? current : pages.find((candidate) => !isStagingPage(candidate)));
+    if (target && (!penpot.currentPage || penpot.currentPage.id !== target.id)) await penpot.openPage(target);
+    let removed = 0;
+    for (const page of filePages()) {
+      if (isStagingPage(page) && (!penpot.currentPage || page.id !== penpot.currentPage.id)) {
+        page.remove();
+        removed++;
+      }
+    }
+    return removed;
+  };
+
   // src/plugin/assets.ts
   var b64 = (encoded) => {
     const binary = atob(encoded);
@@ -963,10 +1109,16 @@
     buildMany,
     fitTexts,
     verifyRanges,
+    gapsBetween,
     groupShapes,
     ungroup,
     removeMany,
     existing,
+    orderChildren,
+    stageBegin,
+    stageFinish,
+    stageTransfer,
+    stageCleanup,
     // reading
     serialize,
     tree,

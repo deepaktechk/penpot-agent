@@ -1,7 +1,8 @@
 // Text shapes: creation with styles and ranges, and the two post-build passes that Python
 // drives with short pauses in between (no timers in here: background tabs throttle them):
 //   verifyRanges - Penpot applies range styles asynchronously and sometimes drops them on later
-//                  paragraphs of a fresh text; read back and re-apply until they stick
+//                  paragraphs of a fresh text, or lets one bleed over the whole text; read back
+//                  the ranges and the gaps between them and re-apply until they stick
 //   fitTexts     - phase 1 fits letter-spacing to the browser width, phase 2 re-anchors
 //                  centred / right-aligned texts
 import type { Range, SpecNode, TextStyle } from "./spec";
@@ -89,7 +90,8 @@ const applyRanges = (text: Shape, node: SpecNode, baseFont: any): void => {
     }
     applyTextStyle(text.getRange(start, end), style, baseFont);
   }
-  if (ranges.length) runtime._ranges.push({ id: text.id, ranges, font: spec.font || runtime.defaultFont || "Inter" });
+  if (ranges.length) runtime._ranges.push({ id: text.id, ranges, font: spec.font || runtime.defaultFont || "Inter",
+                                            base: { color: spec.color ?? "#000000", weight: spec.weight ?? 400, size: spec.size } });
 };
 
 /** Phase 1: letter-spacing from current widths. Phase 2: re-anchor centred/right texts. */
@@ -112,23 +114,55 @@ export const fitTexts = (items: typeof runtime._fit, phase: number): number => {
   return changed;
 };
 
-/** Single pass: re-apply range styles that did not stick. Returns {fixed, bad: first 20}. */
+/** The parts of [0, length) no range covers (ranges may overlap and come in any order). */
+export const gapsBetween = (ranges: [number, number, any][], length: number): [number, number][] => {
+  const gaps: [number, number][] = [];
+  let covered = 0;
+  for (const [start, end] of ranges.slice().sort((first, second) => first[0] - second[0])) {
+    if (start > covered) gaps.push([covered, start]);
+    covered = Math.max(covered, end);
+  }
+  if (covered < length) gaps.push([covered, length]);
+  return gaps;
+};
+
+/** The members of `style` (colour, weight, size) a text range does not have; empty = it sticks. */
+const unmet = (range: TextLike, style: TextStyle): TextStyle => {
+  const normalize = (color: unknown) => String(color || "").toUpperCase();
+  const missing: TextStyle = {};
+  if (style.color !== undefined && !(style.color && (style.color as any).g)) {
+    const wanted = isArray(style.color) ? style.color[0] : style.color;
+    const got = isArray(range.fills) && range.fills[0] ? range.fills[0].fillColor : null;
+    if (normalize(got) !== normalize(wanted)) missing.color = style.color;
+  }
+  if (style.weight !== undefined && String(range.fontWeight) !== String(style.weight)) missing.weight = style.weight;
+  if (style.size !== undefined && String(range.fontSize) !== String(style.size)) missing.size = style.size;
+  return missing;
+};
+
+/** Single pass: re-apply range styles that did not stick, and the base style where a range style
+ *  bled outside its range. Returns {fixed, bad: first 20}. */
 export const verifyRanges = (items: typeof runtime._ranges): { fixed: number; bad: any[] } => {
   let fixed = 0; const bad: any[] = [];
-  const normalize = (color: unknown) => String(color || "").toUpperCase();
   for (const item of items) {
     const text = byId(item.id); if (!text) continue;
-    for (const [start, end, style] of item.ranges) {
+    const checks: [number, number, TextStyle][] = item.ranges.map(([start, end, style]) => [start, end, style]);
+    if (item.base) {
+      const characters = String(text.characters || "");
+      for (let [start, end] of gapsBetween(item.ranges, characters.length)) {
+        // a line break is never painted and keeps the style of the paragraph it ends: not a bleed
+        while (start < end && characters[start] === "\n") start++;
+        while (end > start && characters[end - 1] === "\n") end--;
+        if (start < end) checks.push([start, end, item.base as TextStyle]);
+      }
+    }
+    for (const [start, end, style] of checks) {
       try {
-        const range = text.getRange(start, end); let ok = true;
-        if (style.color !== undefined && !(style.color && style.color.g)) {
-          const wanted = isArray(style.color) ? style.color[0] : style.color;
-          const got = isArray(range.fills) && range.fills[0] ? range.fills[0].fillColor : null;
-          if (normalize(got) !== normalize(wanted)) ok = false;
-        }
-        if (style.weight !== undefined && String(range.fontWeight) !== String(style.weight)) ok = false;
-        if (style.size !== undefined && String(range.fontSize) !== String(style.size)) ok = false;
-        if (!ok) { applyTextStyle(range, style, font(item.font)); fixed++; bad.push([item.id, start, end]); }
+        const range = text.getRange(start, end);
+        const missing = unmet(range, style);
+        if (!Object.keys(missing).length) continue;
+        // a weight needs its font to pick the variant; a colour or a size do not
+        applyTextStyle(range, style === item.base ? missing : style, font(item.font)); fixed++; bad.push([item.id, start, end]);
       } catch (error: any) { bad.push([item.id, start, end, String(error.message || error)]); }
     }
   }

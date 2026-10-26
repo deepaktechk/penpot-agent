@@ -53,7 +53,7 @@ npm --prefix js ci                                 # TypeScript toolchain (only 
 
 ```
 uv run ruff check src tests
-uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging tests.test_build_plan tests.test_svg_source tests.test_image_analysis   # fast, offline
+uv run python -m unittest tests.test_convert tests.test_discovery tests.test_naming tests.test_packaging tests.test_build_plan tests.test_svg_source tests.test_image_analysis tests.test_run_cache tests.test_builder tests.test_plugin_runtime tests.test_mcp_client   # fast, offline
 ./pb selftest                     # + fixture capture (needs Chrome + network)
 npm --prefix js run check         # typecheck + name check + build (when js/src changed)
 ```
@@ -62,8 +62,17 @@ npm --prefix js run check         # typecheck + name check + build (when js/src 
 
 - `execute_code` request limit ~100 KB → pb chunks data through plugin storage.
 - `penpotUtils.findShapeById` scans the whole document (~600 ms per id on a 1400-shape page); use
-  `pb.byId` (built on `page.getShapeById`, ~0.2 ms). Every plugin property change also gets slower as
-  the document grows (~9 ms per shape on an empty file, ~45 ms at 1400 shapes): send fewer, fuller calls.
+  `pb.byId` (built on `page.getShapeById`, ~0.2 ms). Send fewer, fuller calls.
+- The cost of a plugin change grows with the shapes on the **current page** (not the board, the
+  viewport or visibility): a rectangle costs ~15 ms on an empty page, ~60 ms at 1427 shapes
+  (`pb bench build`). Real spec nodes cost ~30 ms even on an empty page. Shapes can only be created on
+  the current page and there is no cross-page move; a component instance + `detach()` is one.
+- `penpotUtils.getPages()` returns plain data (no `remove`, no plugin data; `openPage` rejects it): use
+  `penpot.currentFile.pages`. `penpotUtils.findShapes(match)` (and so `pb.find`) searches **every page**.
+- `penpot.currentFile.revn` is bumped 1-3 s after an edit is persisted; exports do not change it.
+- Export cost is mostly fixed per call (~6 s per section board vs ~14 s for the whole 1920×10564
+  board); sections at fractional y render text antialiasing differently, so stitched section
+  exports never match a whole-board export pixel for pixel.
 - Plugin storage is wiped when the plugin reloads → pb re-injects the sha-versioned runtime.
 - Each plugin task is killed after ~120 s → big sections are built incrementally / in batches;
   only retry idempotent operations (absolute positions, replace-by-key).
@@ -71,14 +80,22 @@ npm --prefix js run check         # typecheck + name check + build (when js/src 
 - Errors come back as text `"Tool execution failed…"`, not as exceptions.
 - Plugin sandbox `fetch` is blocked; `penpot.uploadMediaUrl` works for public URLs; local/private
   files are uploaded as bytes; SVGs Penpot can't fetch are rasterized in Chrome at 2×.
-- Text range styles are flaky on later paragraphs and on ranges ending at text end (pb verifies and
-  re-applies; end ranges applied inversely). No gradients on text ranges (→ per-char colours).
+- Text range styles are flaky on later paragraphs and on ranges ending at text end, and a range can
+  bleed over the whole text (pb verifies ranges and the gaps between them, and re-applies; end ranges
+  applied inversely). A line break keeps the style of the paragraph it ends: never treat it as a bleed.
+  No gradients on text ranges (→ per-char colours).
+- Symbols (★ ✓ ♥, emoji) are drawn with fallback fonts that differ between Chrome and Penpot: their
+  widths are fitted in the plugin (`fitW`), never offline.
 - Text resize/grow-type is slow in Penpot → layout math is done offline (`convert/fontmetrics.py`).
 - Sites with `font-display: optional` need a warm-up visit before capture (capture does it). Chrome
   paints such a font only when it is already cached at first layout; a network answer, however fast,
   is too late. If a load still paints the fallback, capture rewrites `optional` to `swap` in HTML/CSS
   responses and reloads (`js/src/capture/steps/font-display.ts`).
 - Tailwind v4 sites use CSS `lab()`/`oklch()` colours (converter handles them).
+- `visibility: collapse` hides like `hidden` outside tables, and `visibility` is inherited but can be
+  turned back on by a child: decide by the element's own computed value; only `display: none`,
+  `content-visibility: hidden` and a zero-area `clip-path` (`circle(0)`, `inset(50%)`) hide every
+  descendant (`js/src/capture/page/effective.ts`).
 - Complex SVGs (clipPath/mask/pattern/filter/use/image/text) are rasterized; simple ones become vectors.
 - In the capture (Chrome), SVG `getScreenCTM()` returns an `SVGMatrix` (`a`..`f` only, no `m11`..`m22`).
 - The plugin runtime bundle must not start with "use strict" (it is spliced into a function body);

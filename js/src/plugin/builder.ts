@@ -152,6 +152,45 @@ export const removeMany = (ids: string[]): number => {
   return removed;
 };
 
+/** Indexes into `values` of a longest strictly increasing subsequence (patience sorting, O(n log n)). */
+export const longestIncreasing = (values: number[]): number[] => {
+  const tails: number[] = [];                                // tails[k]: last index of the best run of length k + 1
+  const previous: number[] = new Array(values.length).fill(-1);
+  for (let i = 0; i < values.length; i++) {
+    let low = 0, high = tails.length;
+    while (low < high) { const middle = (low + high) >> 1; if (values[tails[middle]] < values[i]) low = middle + 1; else high = middle; }
+    if (low > 0) previous[i] = tails[low - 1];
+    tails[low] = i;
+  }
+  const run: number[] = [];
+  for (let i = tails.length ? tails[tails.length - 1] : -1; i >= 0; i = previous[i]) run.push(i);
+  return run.reverse();
+};
+
+/** Give sibling shapes `ids` this relative layer order (bottom to top) with the fewest moves: the
+ *  longest run already in order stays, every other shape goes right above its predecessor (the
+ *  first one right below its successor). Layers that are not listed keep their place. */
+export const orderChildren = (ids: string[]): { moves: number; ok: boolean } => {
+  const shapes = ids.map(byId).filter(Boolean) as Shape[];
+  const keep = new Set(longestIncreasing(shapes.map(shape => shape.parentIndex)));
+  let moves = 0;
+  shapes.forEach((shape, i) => {
+    if (keep.has(i)) return;
+    if (i > 0) {
+      // taking the shape out shifts everything above it down by one
+      const target = shapes[i - 1].parentIndex;
+      shape.setParentIndex(shape.parentIndex > target ? target + 1 : target);
+    } else {
+      const successor = shapes.find((_, j) => j > 0 && keep.has(j));
+      if (!successor || shape.parentIndex < successor.parentIndex) return;
+      shape.setParentIndex(successor.parentIndex);
+    }
+    moves++;
+  });
+  const final = shapes.map(shape => shape.parentIndex);
+  return { moves, ok: final.every((index, i) => i === 0 || index > final[i - 1]) };
+};
+
 /** Which of these ids still exist as shapes (to trust an unchanged section from a previous build). */
 export const existing = (ids: string[]): string[] => ids.filter(id => !!byId(id));
 
